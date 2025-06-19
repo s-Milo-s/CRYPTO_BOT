@@ -1,3 +1,8 @@
 FastAPI
-uvicorn
+uvicorn[standard]
 gunicorn
+fastapi
+gunicorn
+sqlalchemy
+psycopg2-binary
+requests
