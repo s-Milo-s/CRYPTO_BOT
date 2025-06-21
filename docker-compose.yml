@@ -1,19 +1,6 @@
 version: '3.9'
 
 services:
-  db:
-    image: postgres:15
-    restart: always
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_DB: arbitrage
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: pass
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./sql:/app/sql
-
   crypto_bot:
     image: crypto_bot
     build:
@@ -21,13 +8,7 @@ services:
       dockerfile: ./Dockerfile
     ports:
       - "8000:8000"
-    depends_on:
-      - db
-    environment:
-      - DATABASE_URL=postgresql://user:pass@db:5432/arbitrage
+    env_file:
+      - .env
     volumes:
       - .:/app
-
-# 👇 This goes **outside** the `services:` block
-volumes:
-  postgres_data:
