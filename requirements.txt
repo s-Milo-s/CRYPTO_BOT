@@ -8,3 +8,8 @@ psycopg2-binary
 requests
 httpx
 backoff
+web3
+eth_abi
+eth_utils
+hexbytes
+celery[redis]

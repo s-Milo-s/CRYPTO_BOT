@@ -48,3 +48,45 @@ CREATE TABLE IF NOT EXISTS solusdt_15m_klines (
     taker_buy_base_volume NUMERIC(18, 8),
     taker_buy_quote_volume NUMERIC(18, 8)
 );
+
+CREATE TABLE IF NOT EXISTS eth_uniswap_wethusdt_1m_klines (
+    minute_start TIMESTAMPTZ PRIMARY KEY,
+    open_price NUMERIC,
+    open_ts TIMESTAMPTZ,
+    close_price NUMERIC,
+    close_ts TIMESTAMPTZ,
+    high_price NUMERIC,
+    low_price NUMERIC,
+    avg_price NUMERIC,
+    swap_count INTEGER,
+    total_base_volume NUMERIC,
+    total_quote_volume NUMERIC
+);
+
+CREATE TABLE IF NOT EXISTS arbitrum_uniswap_wethusdt_1m_klines (
+    minute_start TIMESTAMPTZ PRIMARY KEY,
+    open_price NUMERIC,
+    open_ts TIMESTAMPTZ,
+    close_price NUMERIC,
+    close_ts TIMESTAMPTZ,
+    high_price NUMERIC,
+    low_price NUMERIC,
+    avg_price NUMERIC,
+    swap_count INTEGER,
+    total_base_volume NUMERIC,
+    total_quote_volume NUMERIC
+);
+
+CREATE TABLE IF NOT EXISTS arbitrum_uniswap_wethusdc_1m_klines (
+    minute_start TIMESTAMPTZ PRIMARY KEY,
+    open_price NUMERIC,
+    open_ts TIMESTAMPTZ,
+    close_price NUMERIC,
+    close_ts TIMESTAMPTZ,
+    high_price NUMERIC,
+    low_price NUMERIC,
+    avg_price NUMERIC,
+    swap_count INTEGER,
+    total_base_volume NUMERIC,
+    total_quote_volume NUMERIC
+);
