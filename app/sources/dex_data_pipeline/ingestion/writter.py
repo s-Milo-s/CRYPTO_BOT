@@ -89,45 +89,47 @@ def upsert_aggregated_klines(
     db.execute(stmt)
     db.commit()
 
-def delete_pct_outliers_sql(
-    engine,
-    table: str,
-    ts_col: str = "minute_start",
-    price_col: str = "avg_price",
-    pct_thresh: float = 0.30
-):
-    """
-    Delete rows whose price deviates more than `pct_thresh`
-    from the previous row (ordered by timestamp).
+    print(f"----------Finished upserting {len(to_upsert)} rows into {table_name}")
 
-    Args
-    ----
-    engine      : SQLAlchemy engine
-    table       : table name  (schema.table if needed)
-    ts_col      : timestamp column used for ordering (default 'minute_start')
-    price_col   : price column (default 'avg_price')
-    pct_thresh  : fractional threshold, e.g. 0.30 = 30 %
-    """
+# def delete_pct_outliers_sql(
+#     engine,
+#     table: str,
+#     ts_col: str = "minute_start",
+#     price_col: str = "avg_price",
+#     pct_thresh: float = 0.30
+# ):
+#     """
+#     Delete rows whose price deviates more than `pct_thresh`
+#     from the previous row (ordered by timestamp).
 
-    sql = f"""
-    WITH flagged AS (
-        SELECT
-            {ts_col},
-            {price_col},
-            LAG({price_col}) OVER (ORDER BY {ts_col}) AS prev_price
-        FROM {table}
-    ),
-    to_remove AS (
-        SELECT {ts_col}
-        FROM flagged
-        WHERE prev_price IS NOT NULL
-          AND ABS({price_col} - prev_price) / prev_price > :pct
-    )
-    DELETE FROM {table}
-    USING to_remove
-    WHERE {table}.{ts_col} = to_remove.{ts_col};
-    """
+#     Args
+#     ----
+#     engine      : SQLAlchemy engine
+#     table       : table name  (schema.table if needed)
+#     ts_col      : timestamp column used for ordering (default 'minute_start')
+#     price_col   : price column (default 'avg_price')
+#     pct_thresh  : fractional threshold, e.g. 0.30 = 30 %
+#     """
 
-    with engine.begin() as conn:          # automatic commit
-        rows = conn.execute(text(sql), {"pct": pct_thresh}).rowcount
-        print(f"Deleted {rows} outlier rows (>|{pct_thresh*100:.0f}%| jump).")
+#     sql = f"""
+#     WITH flagged AS (
+#         SELECT
+#             {ts_col},
+#             {price_col},
+#             LAG({price_col}) OVER (ORDER BY {ts_col}) AS prev_price
+#         FROM {table}
+#     ),
+#     to_remove AS (
+#         SELECT {ts_col}
+#         FROM flagged
+#         WHERE prev_price IS NOT NULL
+#           AND ABS({price_col} - prev_price) / prev_price > :pct
+#     )
+#     DELETE FROM {table}
+#     USING to_remove
+#     WHERE {table}.{ts_col} = to_remove.{ts_col};
+#     """
+
+#     with engine.begin() as conn:          # automatic commit
+#         rows = conn.execute(text(sql), {"pct": pct_thresh}).rowcount
+#         print(f"Deleted {rows} outlier rows (>|{pct_thresh*100:.0f}%| jump).")

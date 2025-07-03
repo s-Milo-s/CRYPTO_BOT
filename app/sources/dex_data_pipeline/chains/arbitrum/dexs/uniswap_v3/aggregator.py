@@ -1,7 +1,10 @@
 from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal, getcontext
-
+from celery import shared_task, group
+from app.celery.celery_app import celery_app
+from app.sources.dex_data_pipeline.ingestion.writter import upsert_aggregated_klines
+from app.storage.db import get_db
 getcontext().prec = 28  # High precision for price math
 
 
@@ -75,4 +78,21 @@ class Aggregator:
 
     def reset(self):
         self.buckets.clear()
+
+@celery_app.task(name="aggregate_and_upsert")
+def aggregate_and_upsert(decoded_chunks, dec0, dec1, table):
+    aggregator = Aggregator(dec0, dec1)
+    for chunk in decoded_chunks:       # decoded_chunks is 8 lists
+        for log in chunk:
+            aggregator.add(log)
+
+    minutes = aggregator.aggregate()
+    if minutes:
+        db = next(get_db())
+        try:
+            upsert_aggregated_klines(db, table, minutes)
+        except Exception as e:
+            print(f"Error during upsert: {e}")
+            db.rollback()
+            raise
 

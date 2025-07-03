@@ -34,5 +34,5 @@ async def trigger(
     dex: str = "uniswap_v3",
     pool_address: str = "0xc6962004f452bE9203591991D15f6b388e09E8D0",
 ):
-    runner.delay(chain, dex,pool_address)
+    runner(chain, dex,pool_address)
     return {"status": "Ingestion started"}

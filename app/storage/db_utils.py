@@ -18,4 +18,4 @@ def table_exists_agg(chain, dex, symbol0: str, symbol1: str,interval) -> bool:
     table_name = f"{chain}_{dex}_{symbol0.lower()}{symbol1.lower()}_{interval}_klines"
     db = next(get_db())
     inspector = inspect(db.bind)
-    return table_name in inspector.get_table_names()
+    return table_name if table_name in inspector.get_table_names() else None

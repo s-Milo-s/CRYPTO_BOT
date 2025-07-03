@@ -1,9 +1,11 @@
 from typing import List
 from web3.types import LogReceipt
 from app.sources.dex_data_pipeline.chains.arbitrum.client import get_client
+import backoff
 
 w3 = get_client()
 
+@backoff.on_exception(backoff.expo, Exception, max_tries=3)
 def fetch_swap_logs(pool_address: str, from_block: int, to_block: int, swap_topic: str) -> List[LogReceipt]:
     """Fetch Uniswap V3 swap logs from given pool within block range."""
     try:

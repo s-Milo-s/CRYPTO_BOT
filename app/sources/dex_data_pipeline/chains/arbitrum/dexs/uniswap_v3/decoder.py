@@ -1,31 +1,44 @@
-from eth_utils import event_abi_to_log_topic
-from app.sources.dex_data_pipeline.chains.arbitrum.dexs.uniswap_v3.config import SWAP_ABI
-from web3._utils.events import get_event_data
-# Calculate the topic to filter logs by
-SWAP_TOPIC = event_abi_to_log_topic(SWAP_ABI)
-
-from web3 import Web3
-from web3._utils.events import get_event_data
 from app.sources.dex_data_pipeline.chains.arbitrum.client import get_client
+import math
+from typing import List
+from app.celery.celery_app import celery_app
 
 w3 = get_client()
-swap_event_abi = SWAP_ABI
 
-def decode_swap_event(log, block_cache={}):
-    event_data = get_event_data(w3.codec, swap_event_abi, log)
-    block_number = log['blockNumber']
-    if block_number not in block_cache:
-        block_cache[block_number] = w3.eth.get_block(block_number)['timestamp']
-    return {
-        'block_number': log['blockNumber'],
-        'timestamp': block_cache[block_number],
-        'tx_hash': log['transactionHash'].hex(),
-        'log_index': log['logIndex'],
-        'sender': event_data['args']['sender'],
-        'recipient': event_data['args']['recipient'],
-        'amount0': event_data['args']['amount0'],
-        'amount1': event_data['args']['amount1'],
-        'sqrtPriceX96': event_data['args']['sqrtPriceX96'],
-        'liquidity': event_data['args']['liquidity'],
-        'tick': event_data['args']['tick'],
-    }
+@celery_app.task(name="decode_log_chunk")
+def decode_log_chunk(logs_chunk, block_cache, abi):
+    """
+    Decode a chunk of logs.  Runs in its own Celery worker process,
+    giving real parallelism without ProcessPoolExecutor.
+    """
+    # lightweight ABI tools only
+    from web3 import Web3
+    codec = Web3().codec
+    from web3._utils.events import get_event_data
+
+    out = []
+    for log in logs_chunk:
+        evt = get_event_data(codec, abi, log)
+        bn  = log["blockNumber"]
+        out.append({
+            "block_number": bn,
+            "timestamp":    block_cache[str(bn)],
+            "tx_hash":      log["transactionHash"],
+            "log_index":    log["logIndex"],
+            "sender":       evt["args"]["sender"],
+            "recipient":    evt["args"]["recipient"],
+            "amount0":      evt["args"]["amount0"],
+            "amount1":      evt["args"]["amount1"],
+            "sqrtPriceX96": evt["args"]["sqrtPriceX96"],
+            "liquidity":    evt["args"]["liquidity"],
+            "tick":         evt["args"]["tick"],
+        })
+    return out
+
+
+def chunk_logs(logs: List[dict], n_chunks: int) -> List[List[dict]]:
+    """Split `logs` into ≈even chunks."""
+    if n_chunks <= 1 or len(logs) <= n_chunks:
+        return [logs]
+    size = math.ceil(len(logs) / n_chunks)
+    return [logs[i : i + size] for i in range(0, len(logs), size)]
