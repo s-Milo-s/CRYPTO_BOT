@@ -13,3 +13,4 @@ eth_abi
 eth_utils
 hexbytes
 celery[redis]
+typer

@@ -19,7 +19,8 @@ celery_app.conf.update(
     timezone='UTC',
     enable_utc=True,
 )
-
+import app.sources.dex_data_pipeline.chains.arbitrum.dexs.uniswap_v3.decoder
+import app.sources.dex_data_pipeline.chains.arbitrum.dexs.uniswap_v3.aggregator
 LOGGING_CONFIG = {
     "version": 1,
     "formatters": {
@@ -43,5 +44,3 @@ LOGGING_CONFIG = {
 # Tell Celery not to override root logger
 celery_app.conf.worker_hijack_root_logger = False
 logging.config.dictConfig(LOGGING_CONFIG)
-
-import app.sources.dex_data_pipeline.ingestion.runner

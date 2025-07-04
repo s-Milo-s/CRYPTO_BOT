@@ -5,6 +5,10 @@ import re
 from typing import Dict 
 from decimal import Decimal
 from app.storage.models.dex_swap_aggregator_schema import get_aggregate_model_by_name
+import time
+import sqlalchemy.exc
+from app.storage.db import SessionLocal
+
 
 # Example schema structure for one aggregated row (per minute)
 # {
@@ -113,9 +117,8 @@ def delete_price_anomalies(
         Number of rows deleted
     """
 
-    # Basic sanity check on table name
-    if not re.fullmatch(r"[A-Za-z0-9_]+", table_name):
-        raise ValueError(f"Unsafe table name: {table_name}")
+    # Buffer let db settle after previous operations
+    time.sleep(2)
 
     volume_clause = ""
     if volume_floor is not None:
@@ -144,5 +147,29 @@ def delete_price_anomalies(
     """
 
     result = db.execute(text(sql), {"threshold": pct_threshold})
+    rows = result.fetchall()
     db.commit()
-    return len(result.fetchall())
+    return len(rows)
+
+def delete_price_anomalies_with_retry(
+    table_name: str,
+    retries: int = 3,
+    delay: float = 2.0
+) -> int:
+    """
+    Deletes price anomalies from the given table, with retry logic.
+    """
+    attempt = 0
+    while attempt < retries:
+        try:
+            with SessionLocal() as db:
+                return delete_price_anomalies(db, table_name)
+        except sqlalchemy.exc.InterfaceError as e:
+            print(f"[delete_price_anomalies] InterfaceError on attempt {attempt + 1}: {e}")
+            attempt += 1
+            time.sleep(delay)
+        except Exception as e:
+            print(f"[delete_price_anomalies] Unhandled error: {e}")
+            break
+    print(f"[delete_price_anomalies] Failed after {retries} attempts.")
+    return 0  # or raise if you'd prefer to escalate

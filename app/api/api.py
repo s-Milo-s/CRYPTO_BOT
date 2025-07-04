@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.storage.db import get_db
+import os
 # from app.sources.dexscanner import fetch_and_store_new_dex_pairs
 from app.sources.binance.binance_klines_source import fetch_all_klines
-from app.sources.dex_data_pipeline.ingestion.runner import runner
+import subprocess
+from pathlib import Path
 
 
 
@@ -35,5 +37,21 @@ async def trigger(
     pool_address: str = "0xc6962004f452bE9203591991D15f6b388e09E8D0",
     days_back: int = 1,
 ):
-    runner(chain, dex,pool_address,days_back)
-    return {"status": "Ingestion started"}
+    project_root = Path(__file__).resolve().parents[3]  # Adjust if needed
+    cli_script = project_root / "app" / "sources" / "dex_data_pipeline" / "ingestion" / "cli_ingest.py"
+
+    try:
+        subprocess.Popen(
+            [
+                "python3",
+                "/app/app/sources/dex_data_pipeline/ingestion/cli_ingest.py",
+                "--chain", chain,
+                "--dex", dex,
+                "--pool-address", pool_address,
+                "--days-back", str(days_back),
+            ],
+            env={**os.environ, "PYTHONPATH": "/app"}
+        )
+        return {"status": "Ingestion started"}
+    except Exception as e:
+        return {"status": "Failed to start ingestion", "error": str(e)}

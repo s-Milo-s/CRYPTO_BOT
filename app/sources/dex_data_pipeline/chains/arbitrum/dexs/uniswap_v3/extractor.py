@@ -18,13 +18,13 @@ from app.sources.dex_data_pipeline.chains.arbitrum.token_meta import inspect_poo
 from app.storage.db_utils import table_exists_agg
 from app.sources.dex_data_pipeline.chains.arbitrum.client import get_client
 from app.sources.dex_data_pipeline.chains.arbitrum.blocks import BlockTimestampResolver
-from app.sources.dex_data_pipeline.ingestion.writter import delete_price_anomalies
+from app.sources.dex_data_pipeline.ingestion.writter import delete_price_anomalies_with_retry
 from app.storage.db import SessionLocal
 
 
 w3 = get_client()
 
-def run_extraction(pool_address: str, days_back: int = 1, step: int = 1000, db: Session = None) -> None:
+def run_extraction(pool_address: str, days_back: int = 1, step: int = 1000) -> None:
     """End‑to‑end swap log extraction → minute‑level OHLCV aggregation.
 
     Parameters
@@ -71,7 +71,8 @@ def run_extraction(pool_address: str, days_back: int = 1, step: int = 1000, db: 
     print(f"Extracting data from blocks {start_block} to {end_block} for pool {pool_address}")
 
     # Check if we have any gaps in the aggregated data for this pool.
-    gaps = compute_missing_block_ranges(db, table_name, days_back)
+    with SessionLocal() as session:
+        gaps = compute_missing_block_ranges(session, table_name, days_back)
     if not gaps:
         print("[run_extraction] Up-to-date ✔")
         return
@@ -95,7 +96,7 @@ def run_extraction(pool_address: str, days_back: int = 1, step: int = 1000, db: 
             block_cache = ts_resolver.assign_timestamps(raw_logs)
 
             # Split into chunks to leverage CPU cores / asyncio workers.
-            chunks = chunk_logs(raw_logs, n_chunks=5)
+            chunks = chunk_logs(raw_logs, n_chunks=8)
             print(f"----Chunked logs into {len(chunks)} chunks")
 
             # Build the chord for this range.
@@ -115,9 +116,8 @@ def run_extraction(pool_address: str, days_back: int = 1, step: int = 1000, db: 
     # ---------------------------------------------------------------------
 
     # Cleanup: delete any price anomalies from the aggregated table.
-    with SessionLocal() as new_session:
-        del_mins = delete_price_anomalies(new_session, table_name)
-        print(f"[run_extraction] Deleted {del_mins} price anomalies from {table_name}")
+    del_mins = delete_price_anomalies_with_retry(table_name)
+    print(f"[run_extraction] Deleted {del_mins} price anomalies from {table_name}")
 
     # ---------------------------------------------------------------------
     # Finalize: print duration and return.

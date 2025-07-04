@@ -4,7 +4,7 @@ from decimal import Decimal, getcontext
 from celery import shared_task, group
 from app.celery.celery_app import celery_app
 from app.sources.dex_data_pipeline.ingestion.writter import upsert_aggregated_klines
-from app.storage.db import get_db
+from app.storage.db import SessionLocal
 getcontext().prec = 28  # High precision for price math
 
 
@@ -88,11 +88,7 @@ def aggregate_and_upsert(decoded_chunks, dec0, dec1, table):
 
     minutes = aggregator.aggregate()
     if minutes:
-        db = next(get_db())
-        try:
+        with SessionLocal() as db:
             upsert_aggregated_klines(db, table, minutes)
-        except Exception as e:
-            print(f"Error during upsert: {e}")
-            db.rollback()
-            raise
+            db.commit()
 
