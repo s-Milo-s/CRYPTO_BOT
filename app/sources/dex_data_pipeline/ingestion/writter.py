@@ -124,27 +124,33 @@ def delete_price_anomalies(
     if volume_floor is not None:
         volume_clause = f"AND total_base_volume < {volume_floor}"
 
-    sql = f"""
-    WITH price_changes AS (
-        SELECT
-            minute_start,
-            avg_price,
-            LAG(avg_price) OVER (ORDER BY minute_start) AS prev_avg,
-            ABS(avg_price - LAG(avg_price) OVER (ORDER BY minute_start)) 
-                / LAG(avg_price) OVER (ORDER BY minute_start) AS pct_change
-        FROM {table_name}
-    ),
-    to_delete AS (
-        SELECT minute_start
-        FROM price_changes
-        WHERE prev_avg IS NOT NULL
-          AND pct_change > :threshold
-          {volume_clause}
-    )
-    DELETE FROM {table_name}
-    WHERE minute_start IN (SELECT minute_start FROM to_delete)
-    RETURNING minute_start;
-    """
+    sql = sql = f"""
+        WITH cleaned AS (
+            DELETE FROM {table_name}
+            WHERE avg_price = 0
+            RETURNING minute_start
+        ),
+        price_changes AS (
+            SELECT
+                minute_start,
+                avg_price,
+                LAG(avg_price) OVER (ORDER BY minute_start) AS prev_avg,
+                ABS(avg_price - LAG(avg_price) OVER (ORDER BY minute_start)) 
+                    / NULLIF(LAG(avg_price) OVER (ORDER BY minute_start), 0) AS pct_change
+            FROM {table_name}
+        ),
+        to_delete AS (
+            SELECT minute_start
+            FROM price_changes
+            WHERE prev_avg IS NOT NULL
+            AND pct_change > :threshold
+            {volume_clause}
+        )
+        DELETE FROM {table_name}
+        WHERE minute_start IN (SELECT minute_start FROM to_delete)
+        RETURNING minute_start;
+        """
+
 
     result = db.execute(text(sql), {"threshold": pct_threshold})
     rows = result.fetchall()
