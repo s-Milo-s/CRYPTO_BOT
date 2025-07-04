@@ -33,6 +33,7 @@ async def trigger(
     chain: str = "arbitrum",
     dex: str = "uniswap_v3",
     pool_address: str = "0xc6962004f452bE9203591991D15f6b388e09E8D0",
+    days_back: int = 1,
 ):
-    runner(chain, dex,pool_address)
+    runner(chain, dex,pool_address,days_back)
     return {"status": "Ingestion started"}

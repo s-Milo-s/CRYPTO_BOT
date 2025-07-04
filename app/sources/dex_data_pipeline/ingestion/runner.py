@@ -10,7 +10,7 @@ import traceback
 from app.sources.dex_data_pipeline.chains.arbitrum.dexs.uniswap_v3.extractor import run_extraction
 from app.storage.db_utils import get_db
 
-def background_task(chain: str, dex: str, pool_address: str):
+def background_task(chain: str, dex: str, pool_address: str, days_back = 1):
     try:
         db = next(get_db())
         match chain:
@@ -19,7 +19,7 @@ def background_task(chain: str, dex: str, pool_address: str):
                     case "uniswap_v3":
                         pool_address = Web3.to_checksum_address(pool_address)
                         print(f"[task] Starting extraction for {pool_address}")
-                        run_extraction(pool_address, db=db, step=5000)
+                        run_extraction(pool_address, db=db, step=5000, days_back=days_back)
                         print("Uniswap V3 extraction completed successfully")
                     case _:
                         print(f"[task] Unsupported dex: {dex}")
@@ -29,9 +29,9 @@ def background_task(chain: str, dex: str, pool_address: str):
         print(f"[task] Error during extraction: {e}")
         traceback.print_exc()
 
-def runner(chain: str, dex: str, pool_address: str):
+def runner(chain: str, dex: str, pool_address: str, days_back: int = 1):
     print(f"[runner] Kicking off extraction for {chain}/{dex} pool {pool_address} in background",flush=True)
-    p = Process(target=background_task, args=(chain, dex, pool_address))
+    p = Process(target=background_task, args=(chain, dex, pool_address, days_back))
     p.start()
 
     return "Extraction kicked off in background"

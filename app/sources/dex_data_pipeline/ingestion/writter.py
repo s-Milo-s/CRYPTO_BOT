@@ -1,7 +1,8 @@
-from sqlalchemy import select, insert, update
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
-from typing import Dict, List
+import re
+from typing import Dict 
 from decimal import Decimal
 from app.storage.models.dex_swap_aggregator_schema import get_aggregate_model_by_name
 
@@ -91,45 +92,57 @@ def upsert_aggregated_klines(
 
     print(f"----------Finished upserting {len(to_upsert)} rows into {table_name}")
 
-# def delete_pct_outliers_sql(
-#     engine,
-#     table: str,
-#     ts_col: str = "minute_start",
-#     price_col: str = "avg_price",
-#     pct_thresh: float = 0.30
-# ):
-#     """
-#     Delete rows whose price deviates more than `pct_thresh`
-#     from the previous row (ordered by timestamp).
 
-#     Args
-#     ----
-#     engine      : SQLAlchemy engine
-#     table       : table name  (schema.table if needed)
-#     ts_col      : timestamp column used for ordering (default 'minute_start')
-#     price_col   : price column (default 'avg_price')
-#     pct_thresh  : fractional threshold, e.g. 0.30 = 30 %
-#     """
+def delete_price_anomalies(
+    db: Session,
+    table_name: str,
+    pct_threshold: float = 0.05,
+    volume_floor: float | None = None,
+) -> int:
+    """
+    Delete rows from the given table where the average price changes
+    more than pct_threshold (e.g., 0.05 = 5%) compared to the previous minute.
+    
+    Args:
+        db: SQLAlchemy Session
+        table_name: Name of the target table
+        pct_threshold: Threshold for percentage change (0.05 = 5%)
+        volume_floor: Optional minimum volume condition to filter deletes
 
-#     sql = f"""
-#     WITH flagged AS (
-#         SELECT
-#             {ts_col},
-#             {price_col},
-#             LAG({price_col}) OVER (ORDER BY {ts_col}) AS prev_price
-#         FROM {table}
-#     ),
-#     to_remove AS (
-#         SELECT {ts_col}
-#         FROM flagged
-#         WHERE prev_price IS NOT NULL
-#           AND ABS({price_col} - prev_price) / prev_price > :pct
-#     )
-#     DELETE FROM {table}
-#     USING to_remove
-#     WHERE {table}.{ts_col} = to_remove.{ts_col};
-#     """
+    Returns:
+        Number of rows deleted
+    """
 
-#     with engine.begin() as conn:          # automatic commit
-#         rows = conn.execute(text(sql), {"pct": pct_thresh}).rowcount
-#         print(f"Deleted {rows} outlier rows (>|{pct_thresh*100:.0f}%| jump).")
+    # Basic sanity check on table name
+    if not re.fullmatch(r"[A-Za-z0-9_]+", table_name):
+        raise ValueError(f"Unsafe table name: {table_name}")
+
+    volume_clause = ""
+    if volume_floor is not None:
+        volume_clause = f"AND total_base_volume < {volume_floor}"
+
+    sql = f"""
+    WITH price_changes AS (
+        SELECT
+            minute_start,
+            avg_price,
+            LAG(avg_price) OVER (ORDER BY minute_start) AS prev_avg,
+            ABS(avg_price - LAG(avg_price) OVER (ORDER BY minute_start)) 
+                / LAG(avg_price) OVER (ORDER BY minute_start) AS pct_change
+        FROM {table_name}
+    ),
+    to_delete AS (
+        SELECT minute_start
+        FROM price_changes
+        WHERE prev_avg IS NOT NULL
+          AND pct_change > :threshold
+          {volume_clause}
+    )
+    DELETE FROM {table_name}
+    WHERE minute_start IN (SELECT minute_start FROM to_delete)
+    RETURNING minute_start;
+    """
+
+    result = db.execute(text(sql), {"threshold": pct_threshold})
+    db.commit()
+    return len(result.fetchall())

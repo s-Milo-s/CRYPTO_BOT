@@ -4,6 +4,11 @@ import time
 from typing import Dict, List
 from web3 import Web3
 from typing import List, Dict
+from datetime import datetime, timedelta
+import time
+import re
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 w3 = get_client()
 
@@ -36,6 +41,66 @@ def walk_block_ranges(start: int, end: int, step: int = 1000) -> Tuple[int, int]
     """Yield block ranges in chunks"""
     for i in range(start, end, step):
         yield i, min(i + step - 1, end)
+
+def compute_missing_block_ranges(
+    db: Session,
+    table_name: str,
+    days_back: int,
+) -> list[tuple[int, int]]:
+    """
+    Decide which (start_block, end_block) ranges still need ingestion.
+
+    Returns
+    -------
+    List[Tuple[start_block, end_block]]
+        · empty list  -> nothing new to pull
+        · one range   -> either early gap OR late gap
+        · two ranges  -> early + late gaps
+    """
+    if not re.fullmatch(r"[A-Za-z0-9_]+", table_name):
+        raise ValueError(f"Unsafe table name: {table_name}")
+
+    # --- 1️⃣ current min/max minute_start in the table -------------------
+    row = db.execute(
+        text(f"""
+            SELECT
+              MIN(EXTRACT(EPOCH FROM minute_start))  AS min_ts,
+              MAX(EXTRACT(EPOCH FROM minute_start))  AS max_ts
+            FROM {table_name}
+        """)
+    ).one()
+    have_min_ts, have_max_ts = (
+        int(row.min_ts) if row.min_ts is not None else None,
+        int(row.max_ts) if row.max_ts is not None else None,
+    )
+
+    # --- 2️⃣ user-requested backfill window ------------------------------
+    want_start_ts = int((datetime.utcnow() - timedelta(days=days_back)).timestamp())
+    latest_block  = get_latest_block()
+
+    gaps: list[tuple[int, int]] = []
+
+    if have_min_ts is None:
+        # table empty → pull entire span
+        gaps.append((find_block_by_timestamp(want_start_ts), latest_block))
+        return gaps
+
+    # early gap (history older than we already have)
+    if want_start_ts < have_min_ts:
+        gaps.append((
+            find_block_by_timestamp(want_start_ts),
+            find_block_by_timestamp(have_min_ts - 60)   # one minute before first row
+        ))
+
+    # late gap (new data since last ingest)
+    chain_now_ts = int(time.time())
+    if have_max_ts < chain_now_ts - 60:                # 1-minute safety buffer
+        gaps.append((
+            find_block_by_timestamp(have_max_ts + 60),
+            latest_block
+        ))
+
+    return gaps
 
 class BlockTimestampResolver:
     def __init__(self):
@@ -82,3 +147,6 @@ class BlockTimestampResolver:
             log["timestamp"] = self.estimate_timestamp(block_num)
             cache[str(block_num)] = log["timestamp"]
         return cache
+
+
+
