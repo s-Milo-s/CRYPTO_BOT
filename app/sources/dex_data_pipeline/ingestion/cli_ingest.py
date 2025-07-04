@@ -1,7 +1,7 @@
 import typer
 import traceback
 from web3 import Web3
-from app.sources.dex_data_pipeline.chains.arbitrum.dexs.uniswap_v3.extractor import run_extraction
+from app.sources.dex_data_pipeline.evm.arbitrum.dexs.uniswap_v3.orchestrator import uniswap_orchestrator
 from app.storage.db import SessionLocal
 
 app = typer.Typer(help="Run DEX data extraction from CLI")
@@ -28,7 +28,7 @@ def runner(
                     case "uniswap_v3":
                         pool_address = Web3.to_checksum_address(pool_address)
                         print(f"[cli] Starting extraction for {pool_address}", flush=True)
-                        run_extraction(pool_address, step=5000, days_back=days_back)
+                        uniswap_orchestrator(pool_address, step=5000, days_back=days_back)
                         print("[cli] Extraction completed successfully", flush=True)
                     case _:
                         print(f"[cli] Unsupported DEX: {dex}", flush=True)

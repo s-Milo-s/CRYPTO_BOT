@@ -3,17 +3,15 @@ from datetime import datetime
 from decimal import Decimal, getcontext
 from celery import shared_task, group
 from app.celery.celery_app import celery_app
-from app.sources.dex_data_pipeline.ingestion.writter import upsert_aggregated_klines
+from app.sources.dex_data_pipeline.utils.writter import upsert_aggregated_klines
 from app.storage.db import SessionLocal
 getcontext().prec = 28  # High precision for price math
 
 
 class Aggregator:
-    def __init__(self, dec0: int, dec1: int):
-        self.dec0 = Decimal(10) ** dec0          # e.g. 1e6  for USDT
-        self.dec1 = Decimal(10) ** dec1          # e.g. 1e18 for WETH
-        self.price_scale = Decimal(10) ** (dec0 - dec1)
+    def __init__(self):
 
+        # Initialize buckets for each minute
         self.buckets = defaultdict(lambda: {
             'open_price': None,
             'open_ts': None,
@@ -36,9 +34,9 @@ class Aggregator:
 
     def add(self, swap: dict):
         ts = swap['timestamp']
-        price = self._price_raw(swap['sqrtPriceX96']) * self.price_scale
-        base_vol = abs(Decimal(swap['amount0'])) / self.dec0  # token0
-        quote_vol  = abs(Decimal(swap['amount1'])) / self.dec1  # token1
+        price = swap['price'] 
+        base_vol = swap['base_vol']  # token0
+        quote_vol  = swap['quote_vol']  # token1
 
         minute = self._minute_key(ts)
         bucket = self.buckets[minute]
@@ -80,8 +78,8 @@ class Aggregator:
         self.buckets.clear()
 
 @celery_app.task(name="aggregate_and_upsert")
-def aggregate_and_upsert(decoded_chunks, dec0, dec1, table):
-    aggregator = Aggregator(dec0, dec1)
+def aggregate_and_upsert(decoded_chunks,table):
+    aggregator = Aggregator()
     for chunk in decoded_chunks:       # decoded_chunks is 8 lists
         for log in chunk:
             aggregator.add(log)
