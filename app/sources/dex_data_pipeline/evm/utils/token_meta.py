@@ -2,6 +2,9 @@ from web3 import Web3
 from functools import lru_cache
 from typing import Dict
 from app.sources.dex_data_pipeline.config.settings import POOL_ABI, ERC20_DEC_ABI
+import logging
+
+log = logging.getLogger(__name__)
 
 @lru_cache(maxsize=None)
 def get_token_meta(w3: Web3, token_addr: str) -> Dict:
@@ -19,7 +22,7 @@ def inspect_pool(w3: Web3, pool_addr: str):
     meta0 = get_token_meta(w3, token0)
     meta1 = get_token_meta(w3, token1)
 
-    print("Pool:", pool_addr)
-    print(f" token0: {token0}  symbol={meta0['symbol']}  decimals={meta0['decimals']}")
-    print(f" token1: {token1}  symbol={meta1['symbol']}  decimals={meta1['decimals']}")
+    log.info(f"Pool:{pool_addr}")
+    log.info(f" token0: {token0}  symbol={meta0['symbol']}  decimals={meta0['decimals']}")
+    log.info(f" token1: {token1}  symbol={meta1['symbol']}  decimals={meta1['decimals']}")
     return (meta0['symbol'], meta1['symbol'], meta0['decimals'], meta1['decimals'])

@@ -2,6 +2,9 @@ from typing import List
 from web3 import Web3
 from web3.types import LogReceipt
 import backoff
+import logging
+
+log = logging.getLogger(__name__)
 
 @backoff.on_exception(backoff.expo, Exception, max_tries=3)
 def fetch_logs(
@@ -21,5 +24,5 @@ def fetch_logs(
         })
         return logs
     except Exception as e:
-        print(f"--[!] Error fetching logs for blocks {from_block}-{to_block}: {e}")
+        log.error(f"--[!] Error fetching logs for blocks {from_block}-{to_block}: {e}")
         return []

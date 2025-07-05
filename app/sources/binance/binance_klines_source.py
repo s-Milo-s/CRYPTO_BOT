@@ -10,6 +10,10 @@ from sqlalchemy.exc import IntegrityError
 from app.storage.models.klines import get_kline_class
 from decimal import Decimal
 from sqlalchemy import func
+import logging
+
+log = logging.getLogger(__name__)
+
 
 BINANCE_URL = "https://api.binance.us/api/v3/klines"
 MAX_LIMIT = 1000
@@ -52,7 +56,7 @@ def insert_klines(session, symbol: str, interval: str, rows: list):
             )
             objects.append(kline)
         except Exception as e:
-            print(f"[!] Failed to construct row: {e}")
+            log.error(f"[!] Failed to construct row: {e}")
 
     try:
         session.bulk_save_objects(objects, return_defaults=False)
@@ -60,7 +64,7 @@ def insert_klines(session, symbol: str, interval: str, rows: list):
         return (len(objects), 0)
     except IntegrityError:
         session.rollback()
-        print("[!] Bulk insert failed due to duplicates or constraint issue.")
+        log.error("[!] Bulk insert failed due to duplicates or constraint issue.")
         return (0, len(objects))
 
 
@@ -120,12 +124,12 @@ async def fetch_all_klines(symbol: str, interval: str, end_days_back: int, sessi
                 try:
                     data = await fetch_kline_chunk(client, symbol, interval, chunk_start, end_time)
                     total_chunks += 1
-                    print(f"[{symbol} {interval}] Fetched {len(data)} rows from {chunk_start} to {end_time}")
+                    log.info(f"[{symbol} {interval}] Fetched {len(data)} rows from {chunk_start} to {end_time}")
                     inserted, skipped = insert_klines(session, symbol,interval, data)
                     total_lines_inserted += inserted
                     total_lines_skipped += skipped
                 except (RequestError, HTTPStatusError) as e:
-                    print(f"❌ Failed to fetch chunk: {e}")
+                    log.error(f"❌ Failed to fetch chunk: {e}")
                     return {"status": "error", "reason": str(e)}
                 end_time = chunk_start - interval_ms
                 await asyncio.sleep(0.2)

@@ -8,6 +8,9 @@ from app.storage.models.dex_swap_aggregator_schema import get_aggregate_model_by
 import time
 import sqlalchemy.exc
 from app.storage.db import SessionLocal
+import logging
+
+log = logging.getLogger(__name__)
 
 
 # Example schema structure for one aggregated row (per minute)
@@ -38,7 +41,7 @@ def upsert_aggregated_klines(
     """
     model = get_aggregate_model_by_name(table_name)
     table   = model.__table__
-    print(f"--------Upserting aggregated klines {len(new_rows.keys())}")
+    log.info(f"--------Upserting aggregated klines {len(new_rows.keys())}")
     minute_keys = list(new_rows.keys())
     # Step 1: Fetch existing records in one query
     existing_rows = {
@@ -47,7 +50,7 @@ def upsert_aggregated_klines(
             select(table).where(table.c.minute_start.in_(minute_keys))
         ).fetchall()
     }
-    print(f"--------Fetched {len(existing_rows)} existing rows for {len(minute_keys)} minutes")
+    log.info(f"--------Fetched {len(existing_rows)} existing rows for {len(minute_keys)} minutes")
     to_upsert = []
 
     for minute, incoming in new_rows.items():
@@ -89,12 +92,12 @@ def upsert_aggregated_klines(
         index_elements=['minute_start'],
         set_=update_cols
     )
-    print(f"----------Upserting {len(to_upsert)} rows into {table_name}")
+    log.info(f"----------Upserting {len(to_upsert)} rows into {table_name}")
 
     db.execute(stmt)
     db.commit()
 
-    print(f"----------Finished upserting {len(to_upsert)} rows into {table_name}")
+    log.info(f"----------Finished upserting {len(to_upsert)} rows into {table_name}")
 
 
 def delete_price_anomalies(
@@ -171,11 +174,11 @@ def delete_price_anomalies_with_retry(
             with SessionLocal() as db:
                 return delete_price_anomalies(db, table_name)
         except sqlalchemy.exc.InterfaceError as e:
-            print(f"[delete_price_anomalies] InterfaceError on attempt {attempt + 1}: {e}")
+            log.error(f"[delete_price_anomalies] InterfaceError on attempt {attempt + 1}: {e}")
             attempt += 1
             time.sleep(delay)
         except Exception as e:
-            print(f"[delete_price_anomalies] Unhandled error: {e}")
+            log.error(f"[delete_price_anomalies] Unhandled error: {e}")
             break
-    print(f"[delete_price_anomalies] Failed after {retries} attempts.")
+    log.info(f"[delete_price_anomalies] Failed after {retries} attempts.")
     return 0  # or raise if you'd prefer to escalate

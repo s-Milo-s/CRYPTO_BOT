@@ -14,6 +14,9 @@ from app.sources.dex_data_pipeline.evm.utils.client import get_web3_client
 from app.sources.dex_data_pipeline.evm.utils.blocks import BlockTimestampResolver, BlockClient
 from app.sources.dex_data_pipeline.utils.writter import delete_price_anomalies_with_retry
 from app.storage.db import SessionLocal
+import logging
+
+log = logging.getLogger(__name__)
 
 
 
@@ -52,7 +55,7 @@ def uniswap_orchestrator(pool_address: str, days_back: int = 1, step: int = 1000
     table_name = table_exists_agg("arbitrum","uniswap",token0,token1,"1m")
 
     if not table_name:
-        print(f"Table for {token0}/{token1} does not exist, skipping extraction")
+        log.error(f"Table for {token0}/{token1} does not exist, skipping extraction")
         return
 
     # ---------------------------------------------------------------------
@@ -63,27 +66,27 @@ def uniswap_orchestrator(pool_address: str, days_back: int = 1, step: int = 1000
     ts_resolver = BlockTimestampResolver(w3)
 
 
-    print(f"Extracting data from blocks {start_block} to {end_block} for pool {pool_address}")
+    log.info(f"Extracting data from blocks {start_block} to {end_block} for pool {pool_address}")
 
     # Check if we have any gaps in the aggregated data for this pool.
     with SessionLocal() as session:
         gaps = blockClient.compute_missing_block_ranges(session, table_name, days_back)
     if not gaps:
-        print("[run_extraction] Up-to-date ✔")
+        log.info("[run_extraction] Up-to-date ✔")
         return
 
     total_logs = 0
     # Celery chord chain that we build incrementally so the tasks execute in
     # the same order as the ranges we crawl.
     for gap_start, gap_end in gaps:
-        print(f"[run_extraction] Processing gap from {gap_start} to {gap_end}")
+        log.info(f"[run_extraction] Processing gap from {gap_start} to {gap_end}")
         for from_block, to_block in blockClient.walk_block_ranges(gap_start, gap_end, step=step):
-            print(f"Processing block range: {from_block} to {to_block}")
+            log.info(f"Processing block range: {from_block} to {to_block}")
             
             raw_logs = fetch_logs(w3, pool_address, from_block, to_block, [SWAP_TOPIC])
             raw_logs = [sanitize_log(log) for log in raw_logs]
             total_logs += len(raw_logs)
-            print(f"----Fetched {len(raw_logs)} logs from blocks {from_block} to {to_block}")
+            log.info(f"----Fetched {len(raw_logs)} logs from blocks {from_block} to {to_block}")
             if not raw_logs:
                 continue
             
@@ -92,7 +95,7 @@ def uniswap_orchestrator(pool_address: str, days_back: int = 1, step: int = 1000
 
             # Split into chunks to leverage CPU cores / asyncio workers.
             chunks = chunk_logs(raw_logs, n_chunks=8)
-            print(f"----Chunked logs into {len(chunks)} chunks")
+            log.info(f"----Chunked logs into {len(chunks)} chunks")
 
             # Build the chord for this range.
             range_chord = chord(
@@ -104,19 +107,19 @@ def uniswap_orchestrator(pool_address: str, days_back: int = 1, step: int = 1000
             )
             
         # ✅ Launch this chord now before moving to next range
-            print(f"----Launching chord for blocks {from_block} to {to_block}")
+            log.info(f"----Launching chord for blocks {from_block} to {to_block}")
             result = range_chord.apply_async()
             result.get()
-            print(f"----Chord finished for blocks {from_block} to {to_block}")
+            log.info(f"----Chord finished for blocks {from_block} to {to_block}")
     # ---------------------------------------------------------------------
 
     # Cleanup: delete any price anomalies from the aggregated table.
     del_mins = delete_price_anomalies_with_retry(table_name)
-    print(f"[run_extraction] Deleted {del_mins} price anomalies from {table_name}")
+    log.info(f"[run_extraction] Deleted {del_mins} price anomalies from {table_name}")
 
     # ---------------------------------------------------------------------
     # Finalize: print duration and return.
     duration = time.time() - start_ts
-    print(f"[run_extraction] Completed setup in {duration:.2f}s")
-    print(f"[run_extraction] Total logs processed: {total_logs}")
+    log.info(f"[run_extraction] Completed setup in {duration:.2f}s")
+    log.info(f"[run_extraction] Total logs processed: {total_logs}")
         

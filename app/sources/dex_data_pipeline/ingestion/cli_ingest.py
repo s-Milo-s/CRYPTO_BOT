@@ -3,6 +3,9 @@ import traceback
 from web3 import Web3
 from app.sources.dex_data_pipeline.evm.arbitrum.dexs.uniswap_v3.orchestrator import uniswap_orchestrator
 from app.storage.db import SessionLocal
+import logging
+
+log = logging.getLogger(__name__)
 
 app = typer.Typer(help="Run DEX data extraction from CLI")
 
@@ -27,21 +30,20 @@ def runner(
                 match dex:
                     case "uniswap_v3":
                         pool_address = Web3.to_checksum_address(pool_address)
-                        print(f"[cli] Starting extraction for {pool_address}", flush=True)
+                        log.info(f"[cli] Starting extraction for {pool_address}")
                         uniswap_orchestrator(pool_address, step=5000, days_back=days_back)
-                        print("[cli] Extraction completed successfully", flush=True)
+                        log.info("[cli] Extraction completed successfully")
                     case _:
-                        print(f"[cli] Unsupported DEX: {dex}", flush=True)
+                        log.info(f"[cli] Unsupported DEX: {dex}")
             case _:
-                print(f"[cli] Unsupported chain: {chain}", flush=True)
+                log.info(f"[cli] Unsupported chain: {chain}")
 
     except Exception as e:
-        print(f"[cli] Error during extraction: {e}", flush=True)
-        traceback.print_exc()
+        log.info(f"[cli] Error during extraction: {e}")
     finally:
         if db:
             db.close()
-            print("[cli] Database session closed", flush=True)
+            log.info("[cli] Database session closed")
 
 def main():
     app()
