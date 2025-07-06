@@ -1,27 +1,34 @@
 from celery import chord
-from app.utils.sanitize import sanitize_log
+from app.utils.log_utils import sanitize_log, chunk_logs
 import time
 from datetime import datetime, timedelta
 from app.sources.dex_data_pipeline.evm.utils.events import fetch_logs
-from app.sources.dex_data_pipeline.evm.arbitrum.dexs.uniswap_v3.decoder import chunk_logs, decode_log_chunk
 from app.sources.dex_data_pipeline.utils.aggregator import aggregate_and_upsert
-from sqlalchemy.orm import Session
-from app.sources.dex_data_pipeline.evm.arbitrum.dexs.uniswap_v3.config import SWAP_TOPIC,SWAP_ABI
-from app.sources.dex_data_pipeline.config.settings import ARBITRUM_RPC_URL
 from app.sources.dex_data_pipeline.evm.utils.token_meta import inspect_pool
-from app.storage.db_utils import table_exists_agg
+from app.storage.db_utils import resolve_table_name
 from app.sources.dex_data_pipeline.evm.utils.client import get_web3_client
 from app.sources.dex_data_pipeline.evm.utils.blocks import BlockTimestampResolver, BlockClient
 from app.sources.dex_data_pipeline.utils.writter import delete_price_anomalies_with_retry
 from app.storage.db import SessionLocal
+from app.utils.clean_util import clean_symbol
 import logging
 
 log = logging.getLogger(__name__)
 
 
 
-
-def uniswap_orchestrator(pool_address: str, days_back: int = 1, step: int = 1000) -> None:
+def run_evm_orchestration(
+        rpc_url: str,
+        pool_address: str,
+        swap_topic: str,
+        swap_abi: dict,
+        decode_log_chunk_fn,
+        chain: str = "arbitrum",
+        dex: str = "uniswap",
+        pair: str = "ARB/USDC",
+        days_back: int = 1, 
+        step: int = 1000
+        ) -> None:
     """End‑to‑end swap log extraction → minute‑level OHLCV aggregation.
 
     Parameters
@@ -37,7 +44,7 @@ def uniswap_orchestrator(pool_address: str, days_back: int = 1, step: int = 1000
     """
 
     start_ts = time.time()
-    w3 = get_web3_client(ARBITRUM_RPC_URL)
+    w3 = get_web3_client(rpc_url)
     blockClient = BlockClient(w3)
     # ---------------------------------------------------------------------
     # Resolve the block range we need to crawl.
@@ -52,8 +59,19 @@ def uniswap_orchestrator(pool_address: str, days_back: int = 1, step: int = 1000
     # Inspect the pool (symbols, decimals) & verify aggregation table exists.
     # ---------------------------------------------------------------------
     token0, token1, dec0, dec1 = inspect_pool(w3, pool_address)
-    table_name = table_exists_agg("arbitrum","uniswap",token0,token1,"1m")
+    token0 = clean_symbol(token0)
+    token1 = clean_symbol(token1)
+    table_name = resolve_table_name(chain, dex, token0, token1, pair)
+    base_symbol, _ = pair.upper().split("/")  # normalize case
+    token0 = token0.upper()
+    token1 = token1.upper()
 
+    if base_symbol == token0:
+        base_is_token1 = False
+    elif base_symbol == token1:
+        base_is_token1 = True
+    else:
+        raise ValueError(f"Base symbol '{base_symbol}' doesn't match token0 '{token0}' or token1 '{token1}'")
     if not table_name:
         log.error(f"Table for {token0}/{token1} does not exist, skipping extraction")
         return
@@ -83,7 +101,7 @@ def uniswap_orchestrator(pool_address: str, days_back: int = 1, step: int = 1000
         for from_block, to_block in blockClient.walk_block_ranges(gap_start, gap_end, step=step):
             log.info(f"Processing block range: {from_block} to {to_block}")
             
-            raw_logs = fetch_logs(w3, pool_address, from_block, to_block, [SWAP_TOPIC])
+            raw_logs = fetch_logs(w3, pool_address, from_block, to_block, [swap_topic])
             raw_logs = [sanitize_log(log) for log in raw_logs]
             total_logs += len(raw_logs)
             log.info(f"----Fetched {len(raw_logs)} logs from blocks {from_block} to {to_block}")
@@ -100,7 +118,7 @@ def uniswap_orchestrator(pool_address: str, days_back: int = 1, step: int = 1000
             # Build the chord for this range.
             range_chord = chord(
             header=[
-                decode_log_chunk.s(chunk,block_cache, SWAP_ABI, dec0, dec1)
+                decode_log_chunk_fn.s(chunk,block_cache, swap_abi, dec0, dec1,base_is_token1)
                 for chunk in chunks
             ],
             body=aggregate_and_upsert.s(table_name)

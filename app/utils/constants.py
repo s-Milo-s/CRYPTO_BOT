@@ -16,3 +16,10 @@ INTERVAL_MS = {
     "1w": 604_800_000,
     "1M": 2_592_000_000  # Approx: 30d * 24h * 60m * 60s * 1000ms
 }
+
+SYMBOL_REPLACEMENTS = {
+    "₮": "t",    # Tether
+    "Ξ": "eth",  # ETH symbol
+    "Ƀ": "btc",  # Bitcoin symbol
+    # Add more as needed
+}

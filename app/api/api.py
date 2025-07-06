@@ -34,11 +34,10 @@ async def fetch_binance_klines(
 async def trigger(
     chain: str = "arbitrum",
     dex: str = "uniswap_v3",
+    pair: str = "ARB/USDC",
     pool_address: str = "0xc6962004f452bE9203591991D15f6b388e09E8D0",
     days_back: int = 1,
 ):
-    project_root = Path(__file__).resolve().parents[3]  # Adjust if needed
-    cli_script = project_root / "app" / "sources" / "dex_data_pipeline" / "ingestion" / "cli_ingest.py"
 
     try:
         subprocess.Popen(
@@ -47,6 +46,7 @@ async def trigger(
                 "/app/app/sources/dex_data_pipeline/ingestion/cli_ingest.py",
                 "--chain", chain,
                 "--dex", dex,
+                "--pair", pair,
                 "--pool-address", pool_address,
                 "--days-back", str(days_back),
             ],

@@ -1,7 +1,7 @@
 import typer
-import traceback
 from web3 import Web3
-from app.sources.dex_data_pipeline.evm.arbitrum.dexs.uniswap_v3.orchestrator import uniswap_orchestrator
+from app.sources.dex_data_pipeline.evm.arbitrum.dexs.uniswap_v3.runner import run_uniswap_orchestration
+from app.sources.dex_data_pipeline.evm.arbitrum.dexs.camelot.runner import run_sushiswap_orchestration
 from app.storage.db import SessionLocal
 import logging
 
@@ -13,6 +13,7 @@ app = typer.Typer(help="Run DEX data extraction from CLI")
 def runner(
     chain: str = typer.Option(..., help="e.g. arbitrum"),
     dex: str = typer.Option(..., help="e.g. uniswap_v3"),
+    pair: str = typer.Option(..., help="e.g. ARB/USDC"),
     pool_address: str = typer.Option(..., help="0x..."),
     days_back: int = typer.Option(1, help="How many days to back-fill"),
 ):
@@ -24,15 +25,20 @@ def runner(
         db = SessionLocal()
         chain = chain.lower()
         dex = dex.lower()
+        pool_address = Web3.to_checksum_address(pool_address)
 
         match chain:
             case "arbitrum":
                 match dex:
                     case "uniswap_v3":
-                        pool_address = Web3.to_checksum_address(pool_address)
-                        log.info(f"[cli] Starting extraction for {pool_address}")
-                        uniswap_orchestrator(pool_address, step=5000, days_back=days_back)
+                        log.info(f"[cli] Starting extraction for uniswap {pool_address}")
+                        run_uniswap_orchestration(pool_address, chain, dex, pair, step=5000, days_back=days_back)
                         log.info("[cli] Extraction completed successfully")
+                    case "camelot":
+                        log.info(f"[cli] Starting extraction for comelot {pool_address}")
+                        run_sushiswap_orchestration(pool_address, chain, dex, pair, step=5000, days_back=days_back)
+                        log.info("[cli] Extraction completed successfully")
+
                     case _:
                         log.info(f"[cli] Unsupported DEX: {dex}")
             case _:
