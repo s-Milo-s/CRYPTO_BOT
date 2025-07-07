@@ -1,7 +1,9 @@
 import typer
 from web3 import Web3
 from app.sources.dex_data_pipeline.evm.arbitrum.dexs.uniswap_v3.runner import run_uniswap_orchestration
-from app.sources.dex_data_pipeline.evm.arbitrum.dexs.camelot.runner import run_sushiswap_orchestration
+from app.sources.dex_data_pipeline.evm.arbitrum.dexs.camelot.runner import run_camelot_orchestration
+from app.sources.dex_data_pipeline.evm.base.dexs.uniswap_v3.runner import run_base_uniswap_orchestration
+from app.sources.dex_data_pipeline.evm.base.dexs.pancakeswap.runner import run_base_pancakeswap_orchestration
 from app.storage.db import SessionLocal
 import logging
 
@@ -36,11 +38,22 @@ def runner(
                         log.info("[cli] Extraction completed successfully")
                     case "camelot":
                         log.info(f"[cli] Starting extraction for comelot {pool_address}")
-                        run_sushiswap_orchestration(pool_address, chain, dex, pair, step=5000, days_back=days_back)
+                        run_camelot_orchestration(pool_address, chain, dex, pair, step=5000, days_back=days_back)
                         log.info("[cli] Extraction completed successfully")
 
                     case _:
                         log.info(f"[cli] Unsupported DEX: {dex}")
+            case "base":
+                match dex:
+                    case "uniswap_v3": 
+                        log.info(f"[cli] Starting extraction for Uniswap_v3 {pool_address}")
+                        run_base_uniswap_orchestration(pool_address, chain, dex, pair, step=5000, days_back=days_back)
+                        log.info("[cli] Extraction completed successfully")
+                    case "pancakeswap":
+                        log.info(f"[cli] Starting extraction for PancakeSwap {pool_address}")
+                        run_base_pancakeswap_orchestration(pool_address, chain, dex, pair, step=5000, days_back=days_back)
+                        log.info("[cli] Extraction completed successfully")
+      
             case _:
                 log.info(f"[cli] Unsupported chain: {chain}")
 

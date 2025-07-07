@@ -9,7 +9,7 @@ import logging
 
 log = logging.getLogger(__name__)
 
-def run_sushiswap_orchestration(
+def run_camelot_orchestration(
     pool_address: str,
     chain, 
     dex,
@@ -20,7 +20,7 @@ def run_sushiswap_orchestration(
     """
     Run sushiswap data extraction orchestration.
     """
-    log.info(f"Running sushiswap orchestration for pool {pool_address} with step={step} and days_back={days_back}.")
+    log.info(f"Running camelot orchestration for pool {pool_address} with step={step} and days_back={days_back}.")
     run_evm_orchestration(
         rpc_url=ARBITRUM_RPC_URL,
         pool_address=pool_address,

@@ -26,6 +26,12 @@ def get_aggregate_model_by_name(table_name: str):
         'swap_count': Column(Integer),
         'total_base_volume': Column(Numeric(38, 18)),
         'total_quote_volume': Column(Numeric(38, 18)),
+
+        # New metrics
+        'trade_imbalance': Column(Numeric(38, 18)),
+        'price_volatility': Column(Numeric(38, 18)),
+        'price_momentum': Column(Numeric(38, 18)),
+
         '__mapper_args__': {'eager_defaults': True},
     }
 

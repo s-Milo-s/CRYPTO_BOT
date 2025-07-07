@@ -1,4 +1,5 @@
 from eth_utils import event_abi_to_log_topic
+from web3 import Web3
 
 SWAP_ABI = {
     "anonymous": False,
@@ -14,4 +15,5 @@ SWAP_ABI = {
     "name": "Swap",
     "type": "event"
 }
+
 SWAP_TOPIC = event_abi_to_log_topic(SWAP_ABI)

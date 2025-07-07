@@ -8,7 +8,8 @@ from app.sources.dex_data_pipeline.evm.utils.token_meta import inspect_pool
 from app.storage.db_utils import resolve_table_name
 from app.sources.dex_data_pipeline.evm.utils.client import get_web3_client
 from app.sources.dex_data_pipeline.evm.utils.blocks import BlockTimestampResolver, BlockClient
-from app.sources.dex_data_pipeline.utils.writter import delete_price_anomalies_with_retry
+from app.sources.dex_data_pipeline.utils.cleaner import delete_price_anomalies_with_retry
+from app.sources.dex_data_pipeline.utils.feature_generator import crunch_metrics_for_table
 from app.storage.db import SessionLocal
 from app.utils.clean_util import clean_symbol
 import logging
@@ -134,6 +135,10 @@ def run_evm_orchestration(
     # Cleanup: delete any price anomalies from the aggregated table.
     del_mins = delete_price_anomalies_with_retry(table_name)
     log.info(f"[run_extraction] Deleted {del_mins} price anomalies from {table_name}")
+
+    with SessionLocal() as db:
+        crunch_metrics_for_table(db,table_name)
+    log.info(f"[run_extraction] Metrics crunching completed for {table_name}")
 
     # ---------------------------------------------------------------------
     # Finalize: print duration and return.

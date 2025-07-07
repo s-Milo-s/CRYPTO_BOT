@@ -21,6 +21,8 @@ celery_app.conf.update(
 )
 import app.sources.dex_data_pipeline.evm.arbitrum.dexs.uniswap_v3.decoder
 import app.sources.dex_data_pipeline.evm.arbitrum.dexs.camelot.decoder
+import app.sources.dex_data_pipeline.evm.base.dexs.uniswap_v3.decoder
+import app.sources.dex_data_pipeline.evm.base.dexs.pancakeswap.decoder
 import app.sources.dex_data_pipeline.utils.aggregator
 LOGGING_CONFIG = {
     "version": 1,

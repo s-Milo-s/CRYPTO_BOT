@@ -1,5 +1,5 @@
 from eth_utils import event_abi_to_log_topic
-
+from web3 import Web3
 SWAP_ABI = {
     "anonymous": False,
     "inputs": [
