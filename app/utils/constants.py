@@ -23,3 +23,24 @@ SYMBOL_REPLACEMENTS = {
     "Ƀ": "btc",  # Bitcoin symbol
     # Add more as needed
 }
+
+STABLECOINS = {"usdc", "usdt", "dai", "busd", "usdp", "tusd"}
+
+
+WRAPPER_MAP = {
+    "weth": "eth",
+    "cbeth": "eth",
+    "reth": "eth",
+    "steth": "eth",
+    "wbtc": "btc",
+    "tbtc": "btc",
+}
+
+SUPPORTED_CONVERSIONS = {
+    "usdc", 
+    "usdt", 
+    "dai", 
+    "busd", 
+    "usdp", 
+    "tusd"
+}

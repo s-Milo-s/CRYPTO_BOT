@@ -41,3 +41,32 @@ def resolve_table_name(chain: str, dex: str, token0: str, token1: str, pair: str
     else:
         log.error(f"Table for {pair} not found with tokens {token0}, {token1}")
         return None
+    
+def create_table_if_not_exists(session, chain, dex, token1, token0, base_is_token1):
+    base_token = token1 if base_is_token1 else token0
+    quote_token = token0 if base_is_token1 else token1
+
+    table_name = f"{chain}_{dex}_{base_token.lower()}{quote_token.lower()}_1m_klines"
+
+    create_stmt = f"""
+    CREATE TABLE IF NOT EXISTS {table_name} (
+        minute_start TIMESTAMPTZ PRIMARY KEY,
+        open_price NUMERIC,
+        open_ts TIMESTAMPTZ,
+        close_price NUMERIC,
+        close_ts TIMESTAMPTZ,
+        high_price NUMERIC,
+        low_price NUMERIC,
+        avg_price NUMERIC,
+        swap_count INTEGER,
+        total_base_volume NUMERIC,
+        total_quote_volume NUMERIC,
+        trade_imbalance NUMERIC,
+        price_volatility NUMERIC,
+        price_momentum NUMERIC
+    );
+    """
+
+    session.execute(text(create_stmt))
+    session.commit()
+    return table_name

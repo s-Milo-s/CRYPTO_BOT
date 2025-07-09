@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.storage.db import get_db
 import os
 # from app.sources.dexscanner import fetch_and_store_new_dex_pairs
-from app.sources.binance.binance_klines_source import fetch_all_klines
+# from app.sources.binance.binance_klines_source import fetch_all_klines
 import subprocess
 from pathlib import Path
 
@@ -20,15 +20,15 @@ def read_root():
 #     fetch_and_store_new_dex_pairs(db)
 #     return {"status": "completed"}
 
-@router.post("/fetch-klines")
-async def fetch_binance_klines(
-    symbol: str = "INJ/USDT",
-    interval: str = "15m",
-    days_back: int = 30,
-    db: Session = Depends(get_db)
-):
-    result = await fetch_all_klines(symbol, interval, days_back, session=db)
-    return result
+# @router.post("/fetch-klines")
+# async def fetch_binance_klines(
+#     symbol: str = "INJ/USDT",
+#     interval: str = "15m",
+#     days_back: int = 30,
+#     db: Session = Depends(get_db)
+# ):
+#     result = await fetch_all_klines(symbol, interval, days_back, session=db)
+#     return result
 
 @router.post("/trigger/ingestion")
 async def trigger(

@@ -115,6 +115,41 @@ CREATE TABLE IF NOT EXISTS arbitrum_sushiswap_arbusdt_1m_klines (
     low_price NUMERIC,
     avg_price NUMERIC,
     swap_count INTEGER,
-    total_base_volume NUMERIC,   -- ARB
-    total_quote_volume NUMERIC   -- USDT
+    total_base_volume NUMERIC,
+    total_quote_volume NUMERIC
 );
+
+-- Table name suggestion: price_8h_usd
+CREATE TABLE price_8h_usd (
+    -- Start of the 8-hour bucket in UTC (aligned to 00:00, 08:00, 16:00)
+    bucket_start  TIMESTAMPTZ PRIMARY KEY,
+
+    -- USD price of 1 ETH at the end of the bucket
+    eth NUMERIC(18, 8) NOT NULL,
+
+    created_at    TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+
+-- Optional index if querying by time range
+CREATE INDEX idx_price_8h_usd_bucket ON price_8h_usd(bucket_start);
+
+
+CREATE TABLE trade_size_distribution (
+    id SERIAL PRIMARY KEY,
+    pool_name TEXT NOT NULL UNIQUE,
+
+    bucket_neg2 INTEGER DEFAULT 0,
+    bucket_neg1 INTEGER DEFAULT 0,
+    bucket_0 INTEGER DEFAULT 0,
+    bucket_1 INTEGER DEFAULT 0,
+    bucket_2 INTEGER DEFAULT 0,
+    bucket_3 INTEGER DEFAULT 0,
+    bucket_4 INTEGER DEFAULT 0,
+    bucket_5 INTEGER DEFAULT 0,
+    bucket_6 INTEGER DEFAULT 0,
+
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE trade_size_distribution
+ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();

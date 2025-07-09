@@ -13,7 +13,7 @@ from app.sources.dex_data_pipeline.utils.feature_generator import crunch_metrics
 from app.storage.db import SessionLocal
 from app.utils.clean_util import clean_symbol
 import logging
-
+from app.storage.db_utils import create_table_if_not_exists
 log = logging.getLogger(__name__)
 
 
@@ -63,7 +63,7 @@ def run_evm_orchestration(
     token0 = clean_symbol(token0)
     token1 = clean_symbol(token1)
     table_name = resolve_table_name(chain, dex, token0, token1, pair)
-    base_symbol, _ = pair.upper().split("/")  # normalize case
+    base_symbol, quote_pair = pair.upper().split("/")  # normalize case
     token0 = token0.upper()
     token1 = token1.upper()
 
@@ -73,9 +73,28 @@ def run_evm_orchestration(
         base_is_token1 = True
     else:
         raise ValueError(f"Base symbol '{base_symbol}' doesn't match token0 '{token0}' or token1 '{token1}'")
+    
+    # Check if the aggregation table exists, if not create it.
     if not table_name:
-        log.error(f"Table for {token0}/{token1} does not exist, skipping extraction")
-        return
+        log.info(f"Table for pair does not exist, creating it now")
+        with SessionLocal() as session:
+            table_name = create_table_if_not_exists(
+                session,
+                chain,
+                dex,
+                token1,
+                token0,
+                base_is_token1
+            )
+        log.info(f"Created table: {table_name} for pair {token0}/{token1}")
+
+    # we will implement this later it is too translate quote token to USD (we have to pull USD proces by 8h time buckets 
+    # very useful for trade size distribution)
+    
+    # log.info(f"Using table: {table_name} for {token0}/{token1} pair")
+    # with SessionLocal() as session:
+    #     aggTradeSizes = AggregateTradeSizes(session,quote_pair, days_back=days_back)
+
 
     # ---------------------------------------------------------------------
     # Instantiate a *single* timestamp resolver so we reuse its internal map
@@ -98,14 +117,16 @@ def run_evm_orchestration(
     # Celery chord chain that we build incrementally so the tasks execute in
     # the same order as the ranges we crawl.
     for gap_start, gap_end in gaps:
-        log.info(f"[run_extraction] Processing gap from {gap_start} to {gap_end}")
+        log.info(f"Processing gap from {gap_start} to {gap_end}")
         for from_block, to_block in blockClient.walk_block_ranges(gap_start, gap_end, step=step):
+            range_time = time.time()
             log.info(f"Processing block range: {from_block} to {to_block}")
             
             raw_logs = fetch_logs(w3, pool_address, from_block, to_block, [swap_topic])
             raw_logs = [sanitize_log(log) for log in raw_logs]
-            total_logs += len(raw_logs)
-            log.info(f"----Fetched {len(raw_logs)} logs from blocks {from_block} to {to_block}")
+            len_of_logs = len(raw_logs)
+            total_logs += len_of_logs
+            log.info(f"----Fetched {len_of_logs} logs from blocks {from_block} to {to_block}")
             if not raw_logs:
                 continue
             
@@ -113,8 +134,10 @@ def run_evm_orchestration(
             block_cache = ts_resolver.assign_timestamps(raw_logs)
 
             # Split into chunks to leverage CPU cores / asyncio workers.
-            chunks = chunk_logs(raw_logs, n_chunks=8)
-            log.info(f"----Chunked logs into {len(chunks)} chunks")
+            max_workers = 8
+            log_chunks = min(max_workers, max(1, (len_of_logs + 99) // 200))
+            chunks = chunk_logs(raw_logs, n_chunks=log_chunks)
+            log.info(f"------Chunked logs into {len(chunks)} chunks")
 
             # Build the chord for this range.
             range_chord = chord(
@@ -122,14 +145,15 @@ def run_evm_orchestration(
                 decode_log_chunk_fn.s(chunk,block_cache, swap_abi, dec0, dec1,base_is_token1)
                 for chunk in chunks
             ],
-            body=aggregate_and_upsert.s(table_name)
+            body=aggregate_and_upsert.s(table_name,quote_pair.lower())
             )
             
         # ✅ Launch this chord now before moving to next range
-            log.info(f"----Launching chord for blocks {from_block} to {to_block}")
+            log.info(f"--------Launching chord for blocks {from_block} to {to_block}")
             result = range_chord.apply_async()
-            result.get()
-            log.info(f"----Chord finished for blocks {from_block} to {to_block}")
+            # result.get()
+            range_duration = time.time() - range_time
+            log.info(f"----------Chord finished for blocks {from_block} to {to_block} duration: {range_duration:.2f}s")
     # ---------------------------------------------------------------------
 
     # Cleanup: delete any price anomalies from the aggregated table.

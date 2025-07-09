@@ -9,7 +9,7 @@ log = logging.getLogger(__name__)
 def crunch_metrics_for_table(
     db: Session,
     table_name: str,
-    roll_window: int = 5,
+    roll_window: int = 60,
     chunk_size: int = 10_000
 ):
     """

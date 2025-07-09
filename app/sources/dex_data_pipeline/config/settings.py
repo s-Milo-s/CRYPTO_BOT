@@ -1,6 +1,6 @@
 import os
 os.getenv("ALCHEMY_API_KEY")
-ARBITRUM_RPC_URL = "https://arb1.arbitrum.io/rpc" 
+ARBITRUM_RPC_URL = "https://arb-mainnet.g.alchemy.com/v2/T8RoKm3pR0HXuejgk4OFDRzEf73zMS6u" 
 BASE_RPC_URL = f"https://base-mainnet.g.alchemy.com/v2/{os.getenv("ALCHEMY_API_KEY")}"
 
 POOL_ABI = [
@@ -17,3 +17,4 @@ ERC20_DEC_ABI = [
       "inputs": [], "stateMutability": "view", "type": "function"},
 ]
 
+BLOCKS_PER_CALL = 10000
