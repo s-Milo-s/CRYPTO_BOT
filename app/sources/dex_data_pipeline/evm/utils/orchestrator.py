@@ -1,15 +1,17 @@
 from celery import chord
+from celery import group
 from app.utils.log_utils import sanitize_log, chunk_logs
 import time
 from datetime import datetime, timedelta
 from app.sources.dex_data_pipeline.evm.utils.events import fetch_logs
-from app.sources.dex_data_pipeline.utils.aggregator import aggregate_and_upsert
+from app.sources.dex_data_pipeline.utils.aggregator_and_upsert.aggregator_and_upsert_handler import aggregate_and_upsert
 from app.sources.dex_data_pipeline.evm.utils.token_meta import inspect_pool
 from app.storage.db_utils import resolve_table_name
 from app.sources.dex_data_pipeline.evm.utils.client import get_web3_client
 from app.sources.dex_data_pipeline.evm.utils.blocks import BlockTimestampResolver, BlockClient
 from app.sources.dex_data_pipeline.utils.cleaner import delete_price_anomalies_with_retry
 from app.sources.dex_data_pipeline.utils.feature_generator import crunch_metrics_for_table
+from app.sources.dex_data_pipeline.utils.log_extraction_metrics import log_extraction_metrics
 from app.storage.db import SessionLocal
 from app.utils.clean_util import clean_symbol
 import logging
@@ -62,7 +64,7 @@ def run_evm_orchestration(
     token0, token1, dec0, dec1 = inspect_pool(w3, pool_address)
     token0 = clean_symbol(token0)
     token1 = clean_symbol(token1)
-    table_name = resolve_table_name(chain, dex, token0, token1, pair)
+    table_name, swap_table = resolve_table_name(chain, dex, token0, token1, pair)
     base_symbol, quote_pair = pair.upper().split("/")  # normalize case
     token0 = token0.upper()
     token1 = token1.upper()
@@ -78,7 +80,7 @@ def run_evm_orchestration(
     if not table_name:
         log.info(f"Table for pair does not exist, creating it now")
         with SessionLocal() as session:
-            table_name = create_table_if_not_exists(
+            table_name, swap_table = create_table_if_not_exists(
                 session,
                 chain,
                 dex,
@@ -87,6 +89,7 @@ def run_evm_orchestration(
                 base_is_token1
             )
         log.info(f"Created table: {table_name} for pair {token0}/{token1}")
+        log.info(f"Created table for wallet_stats: {swap_table} ")
 
     # we will implement this later it is too translate quote token to USD (we have to pull USD proces by 8h time buckets 
     # very useful for trade size distribution)
@@ -141,16 +144,30 @@ def run_evm_orchestration(
 
             # Build the chord for this range.
             range_chord = chord(
-            header=[
-                decode_log_chunk_fn.s(chunk,block_cache, swap_abi, dec0, dec1,base_is_token1)
-                for chunk in chunks
-            ],
-            body=aggregate_and_upsert.s(table_name,quote_pair.lower())
+                    header=[ decode_log_chunk_fn.s(chunk, block_cache, swap_abi,
+                                                dec0, dec1, base_is_token1)
+                            for chunk in chunks ],
+                    # body gets: (decoded_chunks, table_name, swap_table, quote_pair_lower)
+                    body = aggregate_and_upsert.s(table_name, swap_table, quote_pair.lower())
             )
-            
-        # ✅ Launch this chord now before moving to next range
-            log.info(f"--------Launching chord for blocks {from_block} to {to_block}")
-            result = range_chord.apply_async()
+            range_chord.apply_async()
+            # decode_jobs = [
+            #     decode_log_chunk_fn.s(chunk, block_cache, swap_abi, dec0, dec1, base_is_token1)
+            #     for chunk in chunks
+            # ]
+
+            # log.info("Launching decode tasks...")
+            # decode_results = group(decode_jobs).apply_async()
+            # decoded_chunks = decode_results.get(timeout=300)  # wait + fail loudly if stuck
+
+            # log.info(f"Got decoded result with {len(decoded_chunks)} chunks")
+
+            # # Step 2: Run aggregation manually and wait
+            # log.info("Launching aggregation task...")
+            # agg_result = aggregate_and_upsert.s(decoded_chunks, table_name, swap_table, quote_pair.lower()).apply_async()
+            # agg_result_output = agg_result.get(timeout=300)
+            # log.info(agg_result_output)
+            # log.info("Aggregation task completed.")
             # result.get()
             range_duration = time.time() - range_time
             log.info(f"----------Chord finished for blocks {from_block} to {to_block} duration: {range_duration:.2f}s")
@@ -162,11 +179,20 @@ def run_evm_orchestration(
 
     with SessionLocal() as db:
         crunch_metrics_for_table(db,table_name)
-    log.info(f"[run_extraction] Metrics crunching completed for {table_name}")
+        log.info(f"[run_extraction] Metrics crunching completed for {table_name}")
+        duration = time.time() - start_ts
+        db.commit()
+    with SessionLocal() as db:
+        log_extraction_metrics(
+            db,
+            block_range=f"{start_block}-{end_block}",
+            log_count=total_logs,
+            duration_seconds=duration
+        )
+        db.commit()
 
     # ---------------------------------------------------------------------
     # Finalize: print duration and return.
-    duration = time.time() - start_ts
     log.info(f"[run_extraction] Completed setup in {duration:.2f}s")
     log.info(f"[run_extraction] Total logs processed: {total_logs}")
         

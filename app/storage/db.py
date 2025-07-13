@@ -5,10 +5,25 @@ from sqlalchemy.pool import NullPool
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-engine = create_engine(
+worker_engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
     poolclass=NullPool
+)
+WorkerSessionLocal = scoped_session(
+    sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        expire_on_commit=False,
+        bind=worker_engine,
+    )
+)
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_size=10,
+    max_overflow=20
 )
 SessionLocal = scoped_session(
     sessionmaker(
@@ -18,7 +33,6 @@ SessionLocal = scoped_session(
         bind=engine,
     )
 )
-
 def get_db():
     db = SessionLocal()
     try:

@@ -8,6 +8,10 @@ import time
 import re
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+import logging
+import requests
+from app.sources.dex_data_pipeline.config.settings import ARBITRUM_RPC_URL
+logger = logging.getLogger(__name__)
 
 class BlockClient:
     def __init__(self, w3: Web3):
@@ -81,41 +85,97 @@ class BlockClient:
 
         return gaps
     
+from web3 import Web3
+from typing import List, Dict
+
 class BlockTimestampResolver:
-    def __init__(self,w3: Web3):
+    def __init__(self, w3: Web3, num_chunks: int = 5):
         self.w3 = w3
         self.ranges = []  # Stores (start_block, end_block, start_ts, slope)
+        self.num_chunks = num_chunks
+
+    def batch_get_block_timestamps(self, block_numbers: List[int]) -> Dict[int, int]:
+        try:
+        # Convert to hex and build batch JSON-RPC payload
+            headers = {"Content-Type": "application/json"}
+    
+            payload = [
+                {
+                    "jsonrpc": "2.0",
+                    "method": "eth_getBlockByNumber",
+                    "params": [hex(block), False],
+                    "id": i
+                }
+                for i, block in enumerate(block_numbers)
+            ]
+
+            response = requests.post(ARBITRUM_RPC_URL, json=payload, headers=headers)
+            response.raise_for_status()
+            results = response.json()
+
+            # Parse blockNumber to timestamp mapping
+            return {
+                int(resp["result"]["number"], 16): int(resp["result"]["timestamp"], 16)
+                for resp in results
+                if "result" in resp and resp["result"]
+            }
+        except Exception as e:
+            logger.error(f"Error fetching block timestamps: {e}")
+            return {}
 
     def build_from_logs(self, logs: List[Dict]):
+        """
+        Build linear (start_block, end_block, start_ts, slope) segments.
+
+        • Any checkpoint whose RPC reply is `null` is simply ignored.
+        • If < 2 checkpoints have usable timestamps we raise – there is no
+        way to interpolate a line with just one point.
+        """
         if not logs:
             return
 
-        block_nums = [log["blockNumber"] for log in logs]
+        block_nums  = [log["blockNumber"] for log in logs]
         start_block = min(block_nums)
-        end_block = max(block_nums)
+        end_block   = max(block_nums)
 
-        # Avoid rebuilding if already covered
-        for start, end, *_ in self.ranges:
-            if start <= start_block and end_block <= end:
+        # Skip work if this whole span is already covered
+        for s, e, *_ in self.ranges:
+            if s <= start_block and end_block <= e:
                 return
 
-        header_start = self.w3.eth.get_block(start_block, full_transactions=False)
-        header_end = self.w3.eth.get_block(end_block, full_transactions=False)
+        # ------------------------------------------------------------------
+        # 1. Pick checkpoint blocks (same logic as before).
+        # ------------------------------------------------------------------
+        step        = max(1, (end_block - start_block) // self.num_chunks)
+        checkpoints = list(range(start_block, end_block + 1, step))
+        if checkpoints[-1] != end_block:
+            checkpoints.append(end_block)
 
-        ts_start = header_start["timestamp"]
-        ts_end = header_end["timestamp"]
-        num_blocks = end_block - start_block
-        if num_blocks == 0:
-            slope = 0.0
-        else:
-            slope = (ts_end - ts_start) / num_blocks  # seconds per block
+        # 2. Query the node
+        block_ts_map = self.batch_get_block_timestamps(checkpoints)
 
-        self.ranges.append((start_block, end_block, ts_start, slope))
+        # 3. Keep only the blocks that actually answered (≠ None)
+        #    – ordered list so we can zip neighbours
+        avail = sorted(k for k, v in block_ts_map.items() if v is not None)
+
+        # 4. Must have at least two good checkpoints to draw a line
+        if len(avail) < 2:
+            raise ValueError(
+                f"Only {len(avail)} timestamp(s) returned for "
+                f"blocks {start_block}…{end_block} – cannot interpolate."
+            )
+
+        # 5. Create segments only between **consecutive** good checkpoints
+        for b0, b1 in zip(avail, avail[1:]):
+            t0, t1 = block_ts_map[b0], block_ts_map[b1]
+            slope  = (t1 - t0) / (b1 - b0) if b1 != b0 else 0.0
+            self.ranges.append((b0, b1, t0, slope))
 
     def estimate_timestamp(self, block_number: int) -> int:
         for start, end, ts_start, slope in self.ranges:
             if start <= block_number <= end:
                 return int(ts_start + (block_number - start) * slope)
+        logger.info(f"Estimating timestamp for block {self.ranges}")
         raise ValueError(f"Block {block_number} not in any cached range")
 
     def assign_timestamps(self, logs: List[Dict]) -> Dict[int, int]:
@@ -126,6 +186,7 @@ class BlockTimestampResolver:
             log["timestamp"] = self.estimate_timestamp(block_num)
             cache[str(block_num)] = log["timestamp"]
         return cache
+
 
 
 

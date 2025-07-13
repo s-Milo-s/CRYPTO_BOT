@@ -17,4 +17,5 @@ ERC20_DEC_ABI = [
       "inputs": [], "stateMutability": "view", "type": "function"},
 ]
 
-BLOCKS_PER_CALL = 10000
+ARBITRUM_BLOCKS_PER_CALL = 10000
+BASE_BLOCKS_PER_CALL = 1500

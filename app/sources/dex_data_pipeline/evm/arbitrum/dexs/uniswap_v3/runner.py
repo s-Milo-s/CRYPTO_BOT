@@ -1,6 +1,6 @@
 from app.sources.dex_data_pipeline.evm.utils.orchestrator import run_evm_orchestration
 from app.sources.dex_data_pipeline.config.settings import ARBITRUM_RPC_URL
-from app.sources.dex_data_pipeline.evm.arbitrum.dexs.uniswap_v3.decoder import decode_log_chunk
+from app.sources.dex_data_pipeline.evm.utils.uniswap_v3_decoder import decode_log_chunk
 from app.sources.dex_data_pipeline.evm.arbitrum.dexs.uniswap_v3.config import (
     SWAP_TOPIC,
     SWAP_ABI,

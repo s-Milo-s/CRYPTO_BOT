@@ -19,11 +19,8 @@ celery_app.conf.update(
     timezone='UTC',
     enable_utc=True,
 )
-import app.sources.dex_data_pipeline.evm.arbitrum.dexs.uniswap_v3.decoder
-import app.sources.dex_data_pipeline.evm.arbitrum.dexs.camelot.decoder
-import app.sources.dex_data_pipeline.evm.base.dexs.uniswap_v3.decoder
-import app.sources.dex_data_pipeline.evm.base.dexs.pancakeswap.decoder
-import app.sources.dex_data_pipeline.utils.aggregator
+import app.sources.dex_data_pipeline.evm.utils.uniswap_v3_decoder
+import app.sources.dex_data_pipeline.utils.aggregator_and_upsert.aggregator_and_upsert_handler
 LOGGING_CONFIG = {
     "version": 1,
     "formatters": {

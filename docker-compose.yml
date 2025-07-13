@@ -19,7 +19,7 @@ services:
     build:
       context: .
       dockerfile: ./Dockerfile
-    command: celery -A app.celery.celery_app worker --loglevel=info
+    command: celery -A app.celery.celery_app worker --loglevel=DEBUG
     volumes:
       - .:/app
     env_file:

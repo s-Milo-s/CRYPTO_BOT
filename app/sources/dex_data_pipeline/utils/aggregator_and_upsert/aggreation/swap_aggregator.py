@@ -1,21 +1,15 @@
 from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal, getcontext
-from celery import shared_task, group
-from app.celery.celery_app import celery_app
-from app.sources.dex_data_pipeline.utils.writter import upsert_aggregated_klines, insert_or_update_trade_size_distribution
-from app.storage.db import SessionLocal
-import math
 from collections import defaultdict
 from decimal import Decimal
-from app.utils.constants import SUPPORTED_CONVERSIONS
 import logging
 logger = logging.getLogger(__name__)
 
 getcontext().prec = 28  # High precision for price math
 
 
-class Aggregator: 
+class SwapAggregator: 
     def __init__(self):
 
         # Initialize buckets for each minute
@@ -80,41 +74,3 @@ class Aggregator:
 
     def reset(self):
         self.buckets.clear()
-
-class TradeSizeDistribution:
-    def __init__(self):
-        # bucket_key → count
-        self.buckets = defaultdict(int)
-
-    @staticmethod
-    def _bucket_key(quote_vol: Decimal) -> int:
-        """Returns log10 floor bucket key. E.g., $151 → 2 (100-999)"""
-        if quote_vol <= 0:
-            return -999  # handle edge case with special bucket
-        return int(math.floor(math.log10(float(quote_vol))))
-
-    def add(self, swap: dict):
-        quote_vol = swap["quote_vol"]
-        key = self._bucket_key(quote_vol)
-        if key > 6 or key < -2:
-            return
-        self.buckets[key] += 1
-
-@celery_app.task(name="aggregate_and_upsert")
-def aggregate_and_upsert(decoded_chunks,table,quote_pair):
-    aggregator = Aggregator()
-    dist = TradeSizeDistribution()
-    for chunk in decoded_chunks:       # decoded_chunks is 8 lists
-        for log in chunk:
-            aggregator.add(log)
-            if quote_pair in SUPPORTED_CONVERSIONS:
-                dist.add(log)
-
-    minutes = aggregator.aggregate()
-    if minutes:
-        with SessionLocal() as db:
-            upsert_aggregated_klines(db, table, minutes)
-            if quote_pair in SUPPORTED_CONVERSIONS:
-                insert_or_update_trade_size_distribution(db, pool_name=table, buckets=dist.buckets)
-            db.commit()
-

@@ -1,0 +1,23 @@
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.orm import Session
+from app.storage.models.extraction_metrics import extraction_metrics_table
+import logging
+
+
+log = logging.getLogger(__name__)
+
+
+def log_extraction_metrics(
+    db: Session,
+    block_range: str,
+    log_count: int,
+    duration_seconds: float
+):
+    insert_stmt = pg_insert(extraction_metrics_table).values(
+        block_range=block_range,
+        log_count=log_count,
+        duration_seconds=round(duration_seconds, 2)
+    )
+    db.execute(insert_stmt)
+
+

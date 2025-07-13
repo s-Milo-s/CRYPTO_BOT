@@ -153,3 +153,12 @@ CREATE TABLE trade_size_distribution (
 
 ALTER TABLE trade_size_distribution
 ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();
+
+
+CREATE TABLE IF NOT EXISTS extraction_metrics (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ DEFAULT NOW(),
+    block_range TEXT,                -- e.g., '1000000-1010000'
+    log_count INTEGER NOT NULL,      -- number of logs processed in that range
+    duration_seconds NUMERIC(10, 2)  -- how long it took to process in seconds
+);

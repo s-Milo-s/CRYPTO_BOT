@@ -23,33 +23,54 @@ def table_exists_agg(chain, dex, symbol0: str, symbol1: str,interval) -> bool:
     inspector = inspect(db.bind)
     return table_name if table_name in inspector.get_table_names() else None
 
-def resolve_table_name(chain: str, dex: str, token0: str, token1: str, pair: str, interval: str = "1m") -> str | None:
+def resolve_table_name(
+    chain: str,
+    dex: str,
+    token0: str,
+    token1: str,
+    pair: str,
+    interval: str = "1m"
+) -> tuple[str | None, str | None]:
     """
-    Resolve table name based on user-defined pair (e.g., 'ARB/USDC'), 
+    Resolve table name based on user-defined pair (e.g., 'ARB/USDC'),
     even if token0/token1 are in reverse order.
+
+    Returns
+    -------
+    (kl_table_name, wallet_stats_table_name) or (None, None)
     """
     desired_base, _ = pair.upper().split("/")
-    
-    # Try both combinations to find match
+
     name1 = table_exists_agg(chain, dex, token0, token1, interval)
     name2 = table_exists_agg(chain, dex, token1, token0, interval)
 
     if name1 and token0.upper() == desired_base:
-        return name1
+        base_token = token0
+        quote_token = token1
+        return (
+            name1,
+            f"{chain}_{dex}_{base_token.lower()}{quote_token.lower()}_raw_swaps"
+        )
     elif name2 and token1.upper() == desired_base:
-        return name2
+        base_token = token1
+        quote_token = token0
+        return (
+            name2,
+            f"{chain}_{dex}_{base_token.lower()}{quote_token.lower()}_raw_swaps"
+        )
     else:
         log.error(f"Table for {pair} not found with tokens {token0}, {token1}")
-        return None
+        return None, None
     
 def create_table_if_not_exists(session, chain, dex, token1, token0, base_is_token1):
     base_token = token1 if base_is_token1 else token0
     quote_token = token0 if base_is_token1 else token1
 
-    table_name = f"{chain}_{dex}_{base_token.lower()}{quote_token.lower()}_1m_klines"
+    kl_table_name = f"{chain}_{dex}_{base_token.lower()}{quote_token.lower()}_1m_klines"
+    swap_table_name = f"{chain}_{dex}_{base_token.lower()}{quote_token.lower()}_raw_swaps"
 
-    create_stmt = f"""
-    CREATE TABLE IF NOT EXISTS {table_name} (
+    create_klines_stmt = f"""
+    CREATE TABLE IF NOT EXISTS {kl_table_name} (
         minute_start TIMESTAMPTZ PRIMARY KEY,
         open_price NUMERIC,
         open_ts TIMESTAMPTZ,
@@ -66,7 +87,42 @@ def create_table_if_not_exists(session, chain, dex, token1, token0, base_is_toke
         price_momentum NUMERIC
     );
     """
+    create_swaps_stmt = f"""
+    CREATE TABLE IF NOT EXISTS {swap_table_name} (
+        id              BIGSERIAL PRIMARY KEY,              -- surrogate key
 
-    session.execute(text(create_stmt))
+        -- on-chain identity (uniqueness enforced below)
+        block_number    INTEGER      NOT NULL,
+        "timestamp"     TIMESTAMPTZ  NOT NULL,
+        tx_hash         TEXT         NOT NULL,
+        log_index       INTEGER      NOT NULL,
+
+        -- wallet addresses
+        sender          TEXT         NOT NULL,
+        recipient       TEXT         NOT NULL,
+
+        -- signed deltas (pool perspective)
+        base_delta      NUMERIC(38, 18) NOT NULL,
+        quote_delta     NUMERIC(38, 18) NOT NULL,
+
+        -- absolute volumes (fast volume queries)
+        base_vol        NUMERIC(38, 18) NOT NULL,
+        quote_vol       NUMERIC(38, 18) NOT NULL,
+
+        -- pool context
+        price           NUMERIC(38, 18) NOT NULL,
+        liquidity       NUMERIC(38, 0),
+        tick            INTEGER,
+
+        -- convenience flag
+        is_buy          BOOLEAN      NOT NULL,
+
+        -- make (block, tx, log_index) globally unique for dedup
+        UNIQUE (block_number, tx_hash, log_index)
+    );
+    """
+
+    session.execute(text(create_swaps_stmt))
+    session.execute(text(create_klines_stmt))
     session.commit()
-    return table_name
+    return kl_table_name,swap_table_name
