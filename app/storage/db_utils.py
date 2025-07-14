@@ -101,6 +101,10 @@ def create_table_if_not_exists(session, chain, dex, token1, token0, base_is_toke
         sender          TEXT         NOT NULL,
         recipient       TEXT         NOT NULL,
 
+        -- enrichment (who really called the tx & how we tagged it)
+        caller          TEXT,                           
+        router_tag      TEXT,                         
+        
         -- signed deltas (pool perspective)
         base_delta      NUMERIC(38, 18) NOT NULL,
         quote_delta     NUMERIC(38, 18) NOT NULL,

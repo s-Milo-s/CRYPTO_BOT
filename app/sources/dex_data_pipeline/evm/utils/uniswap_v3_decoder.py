@@ -27,7 +27,6 @@ def decode_log_chunk(
     """
     from web3 import Web3
     from web3._utils.events import get_event_data
-
     codec = Web3().codec
 
     # Decimal scaling helpers

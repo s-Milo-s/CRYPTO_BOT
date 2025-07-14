@@ -94,34 +94,74 @@ class BlockTimestampResolver:
         self.ranges = []  # Stores (start_block, end_block, start_ts, slope)
         self.num_chunks = num_chunks
 
-    def batch_get_block_timestamps(self, block_numbers: List[int]) -> Dict[int, int]:
+    def _get_single_block_ts(self, block: int) -> int | None:
+        """
+        Fallback for a *single* block using the Web3 client already wired into
+        this resolver.  Returns unix timestamp or None if the call fails.
+        """
         try:
-        # Convert to hex and build batch JSON-RPC payload
-            headers = {"Content-Type": "application/json"}
-    
-            payload = [
-                {
-                    "jsonrpc": "2.0",
-                    "method": "eth_getBlockByNumber",
-                    "params": [hex(block), False],
-                    "id": i
-                }
-                for i, block in enumerate(block_numbers)
-            ]
+            blk = self.w3.eth.get_block(block, full_transactions=False)
+            return blk["timestamp"]
+        except Exception as exc:
+            logger.warning(f"Web3 rescue call failed for block {block}: {exc}")
+            return None
 
-            response = requests.post(ARBITRUM_RPC_URL, json=payload, headers=headers)
-            response.raise_for_status()
-            results = response.json()
 
-            # Parse blockNumber to timestamp mapping
-            return {
-                int(resp["result"]["number"], 16): int(resp["result"]["timestamp"], 16)
-                for resp in results
-                if "result" in resp and resp["result"]
-            }
-        except Exception as e:
-            logger.error(f"Error fetching block timestamps: {e}")
+    def batch_get_block_timestamps(self, block_numbers: list[int]) -> dict[int, int]:
+        """
+        • Builds an “anchor” set {b-1, b, b+1} for every checkpoint (skip –1).  
+        • Fetches them in a single JSON-RPC batch (requests).  
+        • If either outer edge is still missing, falls back to one-off Web3 calls.  
+        • Raises ValueError when *both* start and end anchors cannot be recovered.
+        """
+        # Anchor expansion  ────────────────────────────────────────────────
+        anchors: set[int] = set()
+        for b in block_numbers:
+            if b > 0:                 # avoid negative heights
+                anchors.add(b - 1)
+            anchors.add(b)
+            anchors.add(b + 1)
+
+        sorted_anchors = sorted(anchors)
+
+        # Batched JSON-RPC (still via requests – Web3 has no batch helper) ─
+        payload = [
+            {"jsonrpc": "2.0", "method": "eth_getBlockByNumber",
+            "params": [hex(b), False], "id": i}
+            for i, b in enumerate(sorted_anchors)
+        ]
+        try:
+            r = requests.post(ARBITRUM_RPC_URL, json=payload, timeout=10)
+            r.raise_for_status()
+            batch_res = r.json()
+        except Exception as exc:
+            logger.error(f"batch RPC ({len(sorted_anchors)} blocks) failed: {exc}")
             return {}
+
+        ts_map: dict[int, int] = {
+            int(item["result"]["number"], 16): int(item["result"]["timestamp"], 16)
+            for item in batch_res
+            if item.get("result")
+        }
+
+        # 2️⃣  Single-block rescue (Web3) ───────────────────────────────────────
+        start_blk, end_blk = min(block_numbers), max(block_numbers)
+
+        # left edge
+        if all(b not in ts_map for b in (start_blk - 1, start_blk)):
+            if (ts := self._get_single_block_ts(start_blk)) is not None:
+                ts_map[start_blk] = ts
+            else:
+                raise ValueError(f"Cannot resolve timestamp for start block {start_blk}")
+
+        # right edge
+        if all(b not in ts_map for b in (end_blk, end_blk + 1)):
+            if (ts := self._get_single_block_ts(end_blk)) is not None:
+                ts_map[end_blk] = ts
+            else:
+                raise ValueError(f"Cannot resolve timestamp for end block {end_blk}")
+
+        return ts_map
 
     def build_from_logs(self, logs: List[Dict]):
         """

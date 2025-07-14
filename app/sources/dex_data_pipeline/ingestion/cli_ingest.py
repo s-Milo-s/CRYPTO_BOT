@@ -61,7 +61,7 @@ def runner(
                 log.info(f"[cli] Unsupported chain: {chain}")
 
     except Exception as e:
-        log.info(f"[cli] Error during extraction: {e}")
+        log.error("Extraction failed", exc_info=True)
     finally:
         if db:
             db.close()

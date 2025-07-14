@@ -21,6 +21,7 @@ celery_app.conf.update(
 )
 import app.sources.dex_data_pipeline.evm.utils.uniswap_v3_decoder
 import app.sources.dex_data_pipeline.utils.aggregator_and_upsert.aggregator_and_upsert_handler
+import app.sources.dex_data_pipeline.evm.utils.enrich_tx_batch
 LOGGING_CONFIG = {
     "version": 1,
     "formatters": {

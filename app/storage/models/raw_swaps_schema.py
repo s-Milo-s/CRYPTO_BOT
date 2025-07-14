@@ -37,6 +37,9 @@ def get_raw_swaps_model_by_name(table_name: str):
         # ─── wallet addresses ────────────────────────────────────────────
         "sender": Column(Text, nullable=False),
         "recipient": Column(Text, nullable=False),
+        #─── who really called the tx & how we tagged it --------------
+        "caller":     Column(Text),             # NULL if trace failed / dropped
+        "router_tag": Column(Text),             # e.g. 'EOA', 'uniswap_router'
         # ─── signed token deltas (pool perspective) ──────────────────────
         "base_delta": Column(Numeric(38, 18), nullable=False),   # ± base token
         "quote_delta": Column(Numeric(38, 18), nullable=False),  # ± quote token

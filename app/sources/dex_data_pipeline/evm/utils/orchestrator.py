@@ -1,4 +1,5 @@
 from celery import chord
+from celery import chain as celery_chain
 from celery import group
 from app.utils.log_utils import sanitize_log, chunk_logs
 import time
@@ -12,6 +13,7 @@ from app.sources.dex_data_pipeline.evm.utils.blocks import BlockTimestampResolve
 from app.sources.dex_data_pipeline.utils.cleaner import delete_price_anomalies_with_retry
 from app.sources.dex_data_pipeline.utils.feature_generator import crunch_metrics_for_table
 from app.sources.dex_data_pipeline.utils.log_extraction_metrics import log_extraction_metrics
+from app.sources.dex_data_pipeline.evm.utils.enrich_tx_batch import enrich_tx_batch
 from app.storage.db import SessionLocal
 from app.utils.clean_util import clean_symbol
 import logging
@@ -92,7 +94,7 @@ def run_evm_orchestration(
         log.info(f"Created table for wallet_stats: {swap_table} ")
 
     # we will implement this later it is too translate quote token to USD (we have to pull USD proces by 8h time buckets 
-    # very useful for trade size distribution)
+    # very useful for non usd quoted items)
     
     # log.info(f"Using table: {table_name} for {token0}/{token1} pair")
     # with SessionLocal() as session:
@@ -141,34 +143,20 @@ def run_evm_orchestration(
             log_chunks = min(max_workers, max(1, (len_of_logs + 99) // 200))
             chunks = chunk_logs(raw_logs, n_chunks=log_chunks)
             log.info(f"------Chunked logs into {len(chunks)} chunks")
-
+            print(type(decode_log_chunk_fn))
             # Build the chord for this range.
             range_chord = chord(
-                    header=[ decode_log_chunk_fn.s(chunk, block_cache, swap_abi,
-                                                dec0, dec1, base_is_token1)
-                            for chunk in chunks ],
-                    # body gets: (decoded_chunks, table_name, swap_table, quote_pair_lower)
-                    body = aggregate_and_upsert.s(table_name, swap_table, quote_pair.lower())
+                header=[ 
+                    celery_chain(
+                        decode_log_chunk_fn.s(chunk, block_cache, swap_abi,
+                                            dec0, dec1, base_is_token1),
+                        enrich_tx_batch.s(rpc_url).set(queue="enrich"),
+                    )
+                    for chunk in chunks 
+                ],
+                body = aggregate_and_upsert.s(table_name, swap_table, quote_pair.lower())
             )
             range_chord.apply_async()
-            # decode_jobs = [
-            #     decode_log_chunk_fn.s(chunk, block_cache, swap_abi, dec0, dec1, base_is_token1)
-            #     for chunk in chunks
-            # ]
-
-            # log.info("Launching decode tasks...")
-            # decode_results = group(decode_jobs).apply_async()
-            # decoded_chunks = decode_results.get(timeout=300)  # wait + fail loudly if stuck
-
-            # log.info(f"Got decoded result with {len(decoded_chunks)} chunks")
-
-            # # Step 2: Run aggregation manually and wait
-            # log.info("Launching aggregation task...")
-            # agg_result = aggregate_and_upsert.s(decoded_chunks, table_name, swap_table, quote_pair.lower()).apply_async()
-            # agg_result_output = agg_result.get(timeout=300)
-            # log.info(agg_result_output)
-            # log.info("Aggregation task completed.")
-            # result.get()
             range_duration = time.time() - range_time
             log.info(f"----------Chord finished for blocks {from_block} to {to_block} duration: {range_duration:.2f}s")
     # ---------------------------------------------------------------------
