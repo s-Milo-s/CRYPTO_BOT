@@ -18,6 +18,7 @@ from app.storage.db import SessionLocal
 from app.utils.clean_util import clean_symbol
 import logging
 from app.storage.db_utils import create_table_if_not_exists
+from app.sources.dex_data_pipeline.utils.wallet_watcher import crunch_wallet_metrics
 log = logging.getLogger(__name__)
 
 
@@ -143,7 +144,6 @@ def run_evm_orchestration(
             log_chunks = min(max_workers, max(1, (len_of_logs + 99) // 200))
             chunks = chunk_logs(raw_logs, n_chunks=log_chunks)
             log.info(f"------Chunked logs into {len(chunks)} chunks")
-            print(type(decode_log_chunk_fn))
             # Build the chord for this range.
             range_chord = chord(
                 header=[ 
@@ -165,17 +165,23 @@ def run_evm_orchestration(
     del_mins = delete_price_anomalies_with_retry(table_name)
     log.info(f"[run_extraction] Deleted {del_mins} price anomalies from {table_name}")
 
-    with SessionLocal() as db:
-        crunch_metrics_for_table(db,table_name)
-        log.info(f"[run_extraction] Metrics crunching completed for {table_name}")
-        duration = time.time() - start_ts
-        db.commit()
+    # with SessionLocal() as db:
+    #     crunch_metrics_for_table(db,table_name)
+    #     log.info(f"[run_extraction] Metrics crunching completed for {table_name}")
+    duration = time.time() - start_ts
+    #     db.commit()
     with SessionLocal() as db:
         log_extraction_metrics(
             db,
             block_range=f"{start_block}-{end_block}",
             log_count=total_logs,
             duration_seconds=duration
+        )
+        db.commit()
+    with SessionLocal() as db:
+        crunch_wallet_metrics(
+            db,
+            swap_table,   
         )
         db.commit()
 
