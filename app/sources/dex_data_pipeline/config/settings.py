@@ -1,6 +1,6 @@
 import os
 os.getenv("ALCHEMY_API_KEY")
-ARBITRUM_RPC_URL = "https://arb-mainnet.g.alchemy.com/v2/T8RoKm3pR0HXuejgk4OFDRzEf73zMS6u" 
+ARBITRUM_RPC_URL = f"https://arb-mainnet.g.alchemy.com/v2/{os.getenv('ALCHEMY_API_KEY')}" 
 BASE_RPC_URL = f"https://base-mainnet.g.alchemy.com/v2/{os.getenv('ALCHEMY_API_KEY')}"
 
 POOL_ABI = [
