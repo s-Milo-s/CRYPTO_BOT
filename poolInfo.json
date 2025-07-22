@@ -1,0 +1,16 @@
+[
+    {
+        "chain":"arbitrum",
+        "dex":"uniswap_v3",
+        "pair":"WETH/USDT",
+        "pool_address":"0xc31e54c7a869b9fcbecc14363cf510d1c41fa443"
+
+    },
+    {
+        "chain":"arbitrum",
+        "dex":"uniswap_v3",
+        "pair":"WBTC/USDT",
+        "pool_address":"0x5969EFddE3cF5C0D9a88aE51E47d721096A97203"    
+
+    }
+]

@@ -1,18 +1,29 @@
-FastAPI
+# web + worker stack
+fastapi
 uvicorn[standard]
 gunicorn
-fastapi
-gunicorn
+
+# database / data
 sqlalchemy
 psycopg2-binary
+pandas
+cytoolz
+
+# network & retries
 requests
 httpx
 backoff
+
+# blockchain
 web3
 eth_abi
 eth_utils
 hexbytes
+
+# task queue
 celery[redis]
+celery-redbeat==2.2.0       # 2.2.0 is latest stable
+redlock-py==1.0.8
+
+# CLI
 typer
-pandas
-cytoolz

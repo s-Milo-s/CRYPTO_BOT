@@ -16,7 +16,10 @@ def get_raw_swaps_table_name_from_kline(kl_table_name: str) -> str:
         return kl_table_name.replace("_1m_klines", "_raw_swaps")
     raise ValueError(f"Unexpected kline table format: {kl_table_name}")
 
-@celery_app.task(name="aggregate_and_upsert_handler")
+@celery_app.task(
+        name="aggregate_and_upsert_handler",
+        queue="aggregate",
+        )
 def aggregate_and_upsert(decoded_chunks,table,swap_table, quote_pair):
     swap_aggregator = SwapAggregator()
     trade_size_aggregator = TradeSizeAggregator()

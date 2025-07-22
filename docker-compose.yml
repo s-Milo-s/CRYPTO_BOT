@@ -1,6 +1,14 @@
-version: '3.9'
+version: "3.9"
 
 services:
+  # ────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  # ────────────────────────────────────────────────────────────
+  # FastAPI service (unchanged)
   crypto_bot:
     image: crypto_bot
     build:
@@ -14,12 +22,18 @@ services:
       - .:/app
     depends_on:
       - redis
+    restart: always
 
+  # ────────────────────────────────────────────────────────────
+  # Legacy Celery worker (default "celery" + old "enrich" queue)
   celery_worker:
     build:
       context: .
       dockerfile: ./Dockerfile
-    command: celery -A app.celery.celery_app worker --loglevel=DEBUG -Q celery,enrich
+    command: >
+      celery -A app.celery.celery_app worker
+             --loglevel=DEBUG
+             -Q celery,enrich
     volumes:
       - .:/app
     env_file:
@@ -28,7 +42,92 @@ services:
       - redis
     restart: always
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
+  # ────────────────────────────────────────────────────────────
+  # Beat scheduler  – publishes dispatcher every hour
+  celery_beat:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    command: >
+      celery -A app.celery.celery_app beat
+             --loglevel=INFO
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    restart: always
+
+  # ────────────────────────────────────────────────────────────
+  # dispatcher queue (1 worker)
+  worker_dispatch:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    command: >
+      celery -A app.celery.celery_app worker
+             --loglevel=INFO
+             -Q dispatch
+             -c 1
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    restart: always
+
+  # orchestrate queue (1 worker)
+  worker_orchestrate:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    command: >
+      celery -A app.celery.celery_app worker
+             --loglevel=INFO
+             -Q orchestrate
+             -c 1
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    restart: always
+
+  # decode queue – CPU heavy
+  worker_decode:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    command: >
+      celery -A app.celery.celery_app worker
+             --loglevel=INFO
+             -Q decode
+             -c 4
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    restart: always
+
+  # aggregate queue – DB heavy
+  worker_aggregate:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    command: >
+      celery -A app.celery.celery_app worker
+             --loglevel=INFO
+             -Q aggregate
+             -c 2
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    restart: always

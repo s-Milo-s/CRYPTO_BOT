@@ -14,8 +14,10 @@ RETRIES    = 3                       # exponential back-off handled by Celery
 # ────────────────────────────────────────────────────────────────────────────
 # Task: enrich_tx_batch
 # ────────────────────────────────────────────────────────────────────────────
-@shared_task(bind=True,
+@shared_task(
+            name = "enrich_tx_batch",
              queue="enrich",          # put it in its own queue if you like
+             bind=True,
              rate_limit=RATE_LIMIT,
              max_retries=RETRIES,
              default_retry_delay=3)   # seconds → doubles each retry

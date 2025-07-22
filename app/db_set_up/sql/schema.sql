@@ -1,3 +1,7 @@
+-- Just a file to store random sql updates and schema changes. This is not offically used by the app 
+-- but can be used to update the database schema manually if needed with teaks and changes.
+-- Some of these changes are wrong or outdated, so use with caution.
+
 CREATE TABLE IF NOT EXISTS token_pairs (
     id SERIAL PRIMARY KEY,
     base_token TEXT NOT NULL,
@@ -162,3 +166,20 @@ CREATE TABLE IF NOT EXISTS extraction_metrics (
     log_count INTEGER NOT NULL,      -- number of logs processed in that range
     duration_seconds NUMERIC(10, 2)  -- how long it took to process in seconds
 );
+
+CREATE TABLE pools (
+    id            SERIAL PRIMARY KEY,
+    chain         VARCHAR(32)  NOT NULL,
+    dex           VARCHAR(32)  NOT NULL,
+    pair          VARCHAR(32)  NOT NULL,
+    address       CHAR(42)     NOT NULL UNIQUE,
+    active        BOOLEAN      NOT NULL DEFAULT TRUE,
+    last_started  DOUBLE PRECISION
+);
+
+CREATE INDEX ix_pools_chain_dex ON pools (chain, dex);
+
+INSERT INTO pools (chain, dex, pair, address, active, last_started)
+VALUES
+  ('arbitrum', 'uniswap_v3', 'WETH/USDT', '0xc31e54c7a869b9fcbecc14363cf510d1c41fa443', TRUE, NULL),
+  ('arbitrum', 'uniswap_v3', 'WBTC/USDT', '0x5969EFddE3cF5C0D9a88aE51E47d721096A97203', TRUE, NULL);
