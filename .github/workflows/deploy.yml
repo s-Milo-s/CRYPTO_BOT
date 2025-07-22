@@ -23,7 +23,6 @@ jobs:
             set -e
             cd ~/crypto-bot
             git pull origin main
-            docker compose pull          # update base images (redis, etc.)
-            docker compose build         # rebuild crypto_bot service
+            docker compose build                # build local image(s)
             docker compose up -d --force-recreate
-            docker image prune -f        # clean dangling layers
+            docker image prune -f               # clean dangling layers
