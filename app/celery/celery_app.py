@@ -46,7 +46,7 @@ celery_app.conf.update(
 celery_app.conf.beat_schedule = {
     "hourly-dispatch": {
         "task": "dispatch_all",
-        "schedule": crontab(minute="*/10"),          # top of every hour
+        "schedule": crontab(minute="*/5"),          # top of every hour
         "options": {"queue": "dispatch"},
     }
 }
