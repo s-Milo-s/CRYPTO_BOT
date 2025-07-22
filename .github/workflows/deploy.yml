@@ -1,0 +1,29 @@
+name: CI deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Pull the repo (needed only for version info)
+      - uses: actions/checkout@v4
+
+      # SSH into the VM and redeploy
+      - name: SSH → git pull + docker compose up
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+            cd ~/crypto-bot
+            git pull origin main
+            docker compose pull          # update base images (redis, etc.)
+            docker compose build         # rebuild crypto_bot service
+            docker compose up -d --force-recreate
+            docker image prune -f        # clean dangling layers
