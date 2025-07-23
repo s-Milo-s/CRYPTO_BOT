@@ -88,6 +88,8 @@ services:
              --loglevel=INFO
              -Q orchestrate
              -c 1
+             --max-tasks-per-child=100     
+             --max-memory-per-child=300000  
     volumes:
       - .:/app
     env_file:
@@ -105,7 +107,9 @@ services:
       celery -A app.celery.celery_app worker
              --loglevel=INFO
              -Q decode
-             -c 4
+             -c 2
+             --max-tasks-per-child=100     
+             --max-memory-per-child=300000  
     volumes:
       - .:/app
     env_file:
@@ -124,6 +128,8 @@ services:
              --loglevel=INFO
              -Q aggregate
              -c 2
+             --max-tasks-per-child=100     
+             --max-memory-per-child=300000  
     volumes:
       - .:/app
     env_file:
