@@ -11,6 +11,8 @@ EXPOSE 8000
 # ➌  Prevent .pyc files + enable unbuffered logs
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PIP_DEFAULT_TIMEOUT=120 \
+    PIP_RETRIES=10
 
 # ➍  Install Python deps
 COPY requirements.txt .
