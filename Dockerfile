@@ -9,15 +9,16 @@ FROM python:3.11-slim
 EXPOSE 8000
 
 # ➌  Prevent .pyc files + enable unbuffered logs
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV PIP_DEFAULT_TIMEOUT=60 \
-    PIP_RETRIES=10
+ENV PYTHONDONTWRITEBYTECODE=1\
+    PYTHONUNBUFFERED=1\
+    PIP_DEFAULT_TIMEOUT=60 \
+    PIP_RETRIES=10\
+    PIP_INDEX_URL=https://pypi.python.org/simple
 
 # ➍  Install Python deps
 COPY requirements.txt .
 RUN python -m pip install --upgrade pip wheel && \
-    python -m pip install --prefer-binary --use-feature=fast-deps -r requirements.txt
+    python -m pip install -v --prefer-binary --use-feature=fast-deps -r requirements.txt
 
 # ➎  Copy project code
 WORKDIR /app

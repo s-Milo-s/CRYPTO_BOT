@@ -17,6 +17,7 @@ jobs:
       - name: SSH → git pull + docker compose up
         uses: appleboy/ssh-action@v1
         with:
+          script_timeout:  1800
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
