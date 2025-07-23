@@ -17,8 +17,8 @@ jobs:
       - name: SSH → git pull + docker compose up
         uses: appleboy/ssh-action@v1
         with:
-          timeout:         1200        # 20 min for the whole script
-          command_timeout: 600        # 20 min per command, resets on every new line
+          timeout:         "20m"        # 20 min for the whole script
+          command_timeout: "10m"        # 20 min per command, resets on every new line
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
