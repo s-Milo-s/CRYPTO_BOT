@@ -32,6 +32,10 @@ celery_app.conf.update(
     worker_max_tasks_per_child = 20,
 )
 
+celery_app.autodiscover_tasks(
+    ["app.sources.dex_data_pipeline.ingestion"]   # Celery looks for tasks.py files here
+)
+
 # ── 3.  Beat schedule – fires the global dispatcher once per hour ───────
 celery_app.conf.beat_schedule = {
     "hourly-dispatch": {
@@ -58,9 +62,19 @@ LOGGING_CONFIG = {
 celery_app.conf.worker_hijack_root_logger = False
 logging.config.dictConfig(LOGGING_CONFIG)
 
+
+celery_app.conf.imports = [
+    "app.sources.dex_data_pipeline.ingestion.schedule_ingest",
+    "app.sources.dex_data_pipeline.utils.aggregator_and_upsert",
+    "app.sources.dex_data_pipeline.evm.utils.uniswap_v3_decoder",
+    "app.sources.dex_data_pipeline.evm.utils.enrich_tx_batch",
+    "app.scheduler.dispatcher"
+]   # Celery looks for tasks.py files here
+
+
 # ── 6.  *Keep* your task modules so Celery registers them ───────────────
-import app.sources.dex_data_pipeline.evm.utils.uniswap_v3_decoder
-import app.sources.dex_data_pipeline.utils.aggregator_and_upsert.aggregator_and_upsert_handler
-import app.sources.dex_data_pipeline.evm.utils.enrich_tx_batch
-import app.sources.dex_data_pipeline.ingestion.schedule_ingest
-import app.scheduler.dispatcher
+# import app.sources.dex_data_pipeline.evm.utils.uniswap_v3_decoder
+# import app.sources.dex_data_pipeline.utils.aggregator_and_upsert.aggregator_and_upsert_handler
+# import app.sources.dex_data_pipeline.evm.utils.enrich_tx_batch
+# import app.sources.dex_data_pipeline.ingestion.schedule_ingest
+# import app.scheduler.dispatcher

@@ -9,6 +9,7 @@ extraction_metrics_table = Table(
     Column("id", Integer, primary_key=True),
     Column("timestamp", TIMESTAMP(timezone=True), server_default=func.now()),
     Column("block_range", Text),
+    Column("pool_slug", Text, nullable=True),  # new, nullable for legacy rows
     Column("log_count", Integer, nullable=False),
     Column("duration_seconds", Numeric(10, 2))
 )

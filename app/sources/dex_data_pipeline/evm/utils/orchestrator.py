@@ -175,7 +175,8 @@ def run_evm_orchestration(
             db,
             block_range=f"{start_block}-{end_block}",
             log_count=total_logs,
-            duration_seconds=duration
+            duration_seconds=duration,
+            table_name=table_name
         )
         db.commit()
     with SessionLocal() as db:
