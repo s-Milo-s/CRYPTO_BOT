@@ -28,16 +28,6 @@ celery_app.conf.update(
     # --- use RedBeat for persistent schedules
     beat_scheduler        ="redbeat.RedBeatScheduler",
 
-    # --- route queues so parents & children don’t starve each other
-    # task_routes           ={
-    #     "app.*.dispatch_all": {"queue": "dispatch"},
-    #     "app.*.ingest_pool":    {"queue": "orchestrate"},
-    #     # existing child tasks → assign explicit queues
-    #     "app.*.uniswap_decode_log_chunk":     {"queue": "decode"},
-    #     "app.*.enrich_tx_batch":             {"queue": "enrich"},
-    #     "app.*.aggregate_and_upsert":        {"queue": "aggregate"},
-    # },
-
     # --- recycle workers to avoid long‑lived memory creep
     worker_max_tasks_per_child = 20,
 )
@@ -50,19 +40,6 @@ celery_app.conf.beat_schedule = {
         "options": {"queue": "dispatch"},
     }
 }
-
-# ── 4.  (Optional) pre‑register pools if you want hot‑add via code ──────
-#       Remove or adapt this block if your dispatcher reads the DB only.
-# POOLS = ["0x…usdc_eth", "0x…weth_wbtc"]
-# for p in POOLS:
-#     RedBeatSchedulerEntry(
-#         name     = f"ingest-{p}",
-#         task     = "tasks.ingest.ingest_pool",
-#         schedule = crontab(minute=0),
-#         args     = [p],
-#         options  = {"queue": "orchestrate", "expires": 55*60},
-#         app      = celery_app,
-#     ).save()
 
 # ── 5.  Logging ────────────────────────────────────────────
 LOGGING_CONFIG = {
