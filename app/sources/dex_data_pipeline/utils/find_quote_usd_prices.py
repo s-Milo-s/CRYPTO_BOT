@@ -1,74 +1,43 @@
 from __future__ import annotations
 
 import logging
-import time
-import asyncio
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import List, Tuple
-from app.utils.constants import STABLECOINS, SUPPORTED_CONVERSIONS
-from sqlalchemy.orm import Session
 
-from app.utils.clean_util import normalize_symbol
+from sqlalchemy.orm import Session
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
+
+from app.utils.constants import STABLECOINS, SUPPORTED_CONVERSIONS
+from app.utils.clean_util import normalize_symbol
 from app.storage.models.price_8h_usd import Price8hUSD
-from decimal import Decimal
 from app.sources.binance.binance_klines_source import fetch_price_series
 
 log = logging.getLogger(__name__)
 
 
-class FillQuoteUSDPrices:  # pylint: disable=too-few-public-methods
-    """Incrementally build trade‑size aggregation utilities.
-
-    Parameters
-    ----------
-    session : sqlalchemy.orm.Session
-        Active DB session (won’t be closed by this class).
-    symbol : str
-        Asset symbol – expects formats like "ETH", "WETH", "USDC".
-    days_back : int, default 30
-        How far back (in days) the aggregation window should stretch.
-    """
+class FillQuoteUSDPrices:
+    """Fetch and insert 8h quote prices for a given symbol and time range."""
     PRICE_TABLE = "price_8h_usd"
     BUCKET_HOURS = 8
-    PRICE_TABLE = "price_15m_usd"  # ⬅️ Suggestion: 1 row per 15‑min bucket, cols = coins‑to‑USD
-    INTERVAL_MS = BUCKET_HOURS * 60 * 60 * 1_000  # 8 h in ms
 
     def __init__(self, session: Session, symbol: str, days_back: int = 30) -> None:
-        """Initialize the aggregator with a session and symbol."""
-        log.info(
-            "Initializing trade size aggregator for symbol '%s' with %d days back.",
-            symbol.upper(),
-            days_back,
-        )
-        self.session: Session = session
-        self.symbol: str = normalize_symbol(symbol).lower()
-        self.days_back: int = days_back
-        self.end_ms: int = int(time.time() * 1000)
-        self.start_ms: int = self.end_ms - days_back * 86_400_000  # days → ms
+        self.session = session
+        self.symbol = normalize_symbol(symbol).lower()
+        self.days_back = days_back
+        self.end_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        self.start_ms = self.end_ms - days_back * 86_400_000
 
-        # Shortcut: skip any processing for USD‑pegged assets
         if self.symbol in STABLECOINS:
-            log.info(
-                "[%s] Detected stablecoin – trade‑size aggregation skipped.",
-                self.symbol,
-            )
+            log.info("[%s] Detected stablecoin – skipping price backfill.", self.symbol)
             self.missing_price_intervals: List[Tuple[int, int]] = []
-            return
-
-        # For ETH/WETH (scope kept small per requirements)
-        if self.symbol in SUPPORTED_CONVERSIONS:
+        elif self.symbol in SUPPORTED_CONVERSIONS:
             self.missing_price_intervals = self._detect_missing_price_intervals()
-            self.fill_missing_prices()
         else:
             raise ValueError(
-                f"Unsupported symbol '{self.symbol}'. Only ETH or stablecoins handled at this stage."
+                f"Unsupported symbol '{self.symbol}'. Only ETH or stablecoins handled."
             )
-
-    # -------------------------------------------------------------------
-    # Private helpers (stubs for now)
-    # -------------------------------------------------------------------
 
     def _detect_missing_price_intervals(self) -> List[Tuple[int, int]]:
         symbol_col_name = self.symbol
@@ -78,14 +47,10 @@ class FillQuoteUSDPrices:  # pylint: disable=too-few-public-methods
             )
         price_col = getattr(Price8hUSD, symbol_col_name)
 
-        start_dt = datetime.utcfromtimestamp(self.start_ms / 1_000).replace(
-            minute=0, second=0, microsecond=0, tzinfo=timezone.utc
-        )
+        start_dt = datetime.fromtimestamp(self.start_ms / 1000, tz=timezone.utc)
         start_dt -= timedelta(hours=start_dt.hour % self.BUCKET_HOURS)
 
-        end_dt = datetime.utcfromtimestamp(self.end_ms / 1_000).replace(
-            minute=0, second=0, microsecond=0, tzinfo=timezone.utc
-        )
+        end_dt = datetime.fromtimestamp(self.end_ms / 1000, tz=timezone.utc)
         end_dt -= timedelta(hours=end_dt.hour % self.BUCKET_HOURS)
 
         expected_buckets = []
@@ -103,12 +68,10 @@ class FillQuoteUSDPrices:  # pylint: disable=too-few-public-methods
             ).scalars().all()
         )
         existing_set = set(existing_rows)
-
         missing_buckets = [b for b in expected_buckets if b not in existing_set]
         if not missing_buckets:
             return []
 
-        # Assume only one contiguous gap at start and/or end
         gaps = []
         step = timedelta(hours=self.BUCKET_HOURS)
 
@@ -118,7 +81,7 @@ class FillQuoteUSDPrices:  # pylint: disable=too-few-public-methods
                 if b + step in existing_set:
                     gap_end = b
                     break
-            gaps.append((int(missing_buckets[0].timestamp() * 1_000), int(gap_end.timestamp() * 1_000)))
+            gaps.append((int(missing_buckets[0].timestamp() * 1000), int(gap_end.timestamp() * 1000)))
 
         elif missing_buckets[-1] == expected_buckets[-1]:
             gap_start = missing_buckets[0]
@@ -126,22 +89,18 @@ class FillQuoteUSDPrices:  # pylint: disable=too-few-public-methods
                 if b - step in existing_set:
                     gap_start = b
                     break
-            gaps.append((int(gap_start.timestamp() * 1_000), int(missing_buckets[-1].timestamp() * 1_000)))
+            gaps.append((int(gap_start.timestamp() * 1000), int(missing_buckets[-1].timestamp() * 1000)))
 
         return gaps
-    def fill_missing_prices(self, interval: str = "8h") -> None:
+
+    async def fill_missing_prices(self, interval: str = "8h") -> None:
         if not self.missing_price_intervals:
             log.info("[%s] No price gaps detected.", self.symbol.upper())
             return
 
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self._run_price_backfill(interval))
-
-    async def _run_price_backfill(self, interval: str) -> None:
         all_rows = []
         for gap_start, gap_end in self.missing_price_intervals:
             log.info("[%s] Fetching price data from %s to %s", self.symbol.upper(), gap_start, gap_end)
-
             try:
                 data = await fetch_price_series(
                     symbol=f"{self.symbol.upper()}USD",
@@ -155,7 +114,7 @@ class FillQuoteUSDPrices:  # pylint: disable=too-few-public-methods
 
             for ts, price in data:
                 row = {
-                    "bucket_start": datetime.utcfromtimestamp(ts / 1000).replace(tzinfo=timezone.utc),
+                    "bucket_start": datetime.fromtimestamp(ts / 1000, tz=timezone.utc),
                     self.symbol: Decimal(str(price)),
                     "created_at": datetime.now(timezone.utc),
                 }
@@ -166,11 +125,15 @@ class FillQuoteUSDPrices:  # pylint: disable=too-few-public-methods
             return
 
         try:
-            self.session.execute(
+            stmt = (
                 insert(Price8hUSD)
                 .values(all_rows)
-                .on_conflict_do_nothing(index_elements=["bucket_start"])
+                .on_conflict_do_update(
+                    index_elements=["bucket_start"],
+                    set_={self.symbol: insert(Price8hUSD).excluded[self.symbol]},
                 )
+            )
+            self.session.execute(stmt)
             self.session.commit()
             log.info("[%s] Inserted %d rows into %s", self.symbol.upper(), len(all_rows), self.PRICE_TABLE)
         except Exception as e:

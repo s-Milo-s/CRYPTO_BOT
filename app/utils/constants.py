@@ -24,7 +24,7 @@ SYMBOL_REPLACEMENTS = {
     # Add more as needed
 }
 
-STABLECOINS = {"usdc", "usdt", "dai", "busd", "usdp", "tusd"}
+STABLECOINS = {"usdc", "usdt", "dai", "busd", "usdp", "tusd", "usd"}
 
 
 WRAPPER_MAP = {
@@ -42,5 +42,6 @@ SUPPORTED_CONVERSIONS = {
     "dai", 
     "busd", 
     "usdp", 
-    "tusd"
+    "tusd",
+    "eth"
 }

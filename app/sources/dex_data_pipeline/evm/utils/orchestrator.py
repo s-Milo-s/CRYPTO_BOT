@@ -19,6 +19,8 @@ from app.utils.clean_util import clean_symbol
 import logging
 from app.storage.db_utils import create_table_if_not_exists
 from app.sources.dex_data_pipeline.utils.wallet_watcher import crunch_wallet_metrics
+from app.sources.dex_data_pipeline.utils.find_quote_usd_prices import FillQuoteUSDPrices
+import asyncio
 log = logging.getLogger(__name__)
 
 
@@ -52,6 +54,7 @@ def run_evm_orchestration(
     start_ts = time.time()
     w3 = get_web3_client(rpc_url)
     blockClient = BlockClient(w3)
+
     # ---------------------------------------------------------------------
     # Resolve the block range we need to crawl.
     # ---------------------------------------------------------------------
@@ -73,12 +76,13 @@ def run_evm_orchestration(
     token1 = token1.upper()
 
     if base_symbol == token0:
+        log.info(f"Base symbol '{base_symbol}' matches token0 '{token0}'")
         base_is_token1 = False
     elif base_symbol == token1:
+        log.info(f"Base symbol '{base_symbol}' matches token1 '{token1}'")
         base_is_token1 = True
     else:
         raise ValueError(f"Base symbol '{base_symbol}' doesn't match token0 '{token0}' or token1 '{token1}'")
-    
     # Check if the aggregation table exists, if not create it.
     if not table_name:
         log.info(f"Table for pair does not exist, creating it now")
@@ -98,8 +102,10 @@ def run_evm_orchestration(
     # very useful for non usd quoted items)
     
     # log.info(f"Using table: {table_name} for {token0}/{token1} pair")
-    # with SessionLocal() as session:
-    #     aggTradeSizes = AggregateTradeSizes(session,quote_pair, days_back=days_back)
+    with SessionLocal() as session:
+        filler = FillQuoteUSDPrices(session, "ETH", days_back=1)
+        asyncio.run(filler.fill_missing_prices())
+
 
 
     # ---------------------------------------------------------------------
@@ -182,7 +188,8 @@ def run_evm_orchestration(
     with SessionLocal() as db:
         crunch_wallet_metrics(
             db,
-            swap_table,   
+            swap_table,
+            quote_token=quote_pair,   
         )
         db.commit()
 

@@ -22,6 +22,8 @@ import numpy as np
 import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from app.utils.clean_util import normalize_symbol
+from app.utils.constants import STABLECOINS
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +45,7 @@ def crunch_wallet_metrics(
     raw_table: str,
     metrics_table: str | None = None,
     days_back: int = 180,
+    quote_token: str = "USDC"
 ) -> None:
     metrics_table = metrics_table or metrics_table_name(raw_table)
 
@@ -51,42 +54,115 @@ def crunch_wallet_metrics(
 
     end = datetime.now(tz=timezone.utc)
     start = end - timedelta(days=days_back)
+    symbol      = normalize_symbol(quote_token)
+    is_stable   = symbol in STABLECOINS
 
     # --------------------------------------------------------------
     # 1. Aggregate in SQL (fast)
     # --------------------------------------------------------------
-    sql = text(
-        f"""
+    stablecoin_sql = """
         WITH base AS (
-          SELECT caller                                  AS wallet,
-                 CASE WHEN is_buy
-                      THEN  quote_vol::float8
-                      ELSE -quote_vol::float8 END        AS signed_vol,
-                 "timestamp"
-          FROM   {raw_table}
-          WHERE  caller IS NOT NULL
-            AND  "timestamp" >= :start
-            AND  "timestamp" <  :end
-        )
-        SELECT wallet,
-               SUM(ABS(signed_vol))                                              AS turnover,
-               SUM(CASE WHEN signed_vol>0 THEN signed_vol ELSE 0 END)            AS buy_volume,
-               SUM(CASE WHEN signed_vol<0 THEN ABS(signed_vol) ELSE 0 END)       AS sell_volume,
-               COUNT(*)                                                          AS trades,
-               MAX("timestamp")                                                 AS last_trade,
-               SUM(
-                    CASE
-                        WHEN "timestamp" >= (:end - interval '24 hours')
-                        THEN ABS(signed_vol)
-                        ELSE 0
-                    END
-                    ) AS turnover_24h
-        FROM   base
-        GROUP  BY wallet;
-        """
-    )
+        SELECT
+            s.caller AS wallet,
+            s.quote_vol,
+            s.is_buy,
+            s."timestamp"
+        FROM {raw_table} s
+        WHERE s.caller IS NOT NULL
+            AND s."timestamp" >= :start
+            AND s."timestamp" <  :end
+        ),
 
-    grouped = pd.read_sql(sql, db.bind, params={"start": start, "end": end})
+        usd_swaps AS (
+        SELECT
+            wallet,
+            "timestamp",
+            quote_vol::float8 * (CASE WHEN is_buy THEN 1 ELSE -1 END) AS signed_vol_usd
+        FROM base
+        )
+
+        SELECT
+        wallet,
+        SUM(ABS(signed_vol_usd))                                    AS turnover,
+        SUM(CASE WHEN signed_vol_usd > 0 THEN  signed_vol_usd END)  AS buy_volume,
+        SUM(CASE WHEN signed_vol_usd < 0 THEN -signed_vol_usd END)  AS sell_volume,
+        COUNT(*)                                                    AS trades,
+        MAX("timestamp")                                            AS last_trade,
+        SUM(
+            CASE
+            WHEN "timestamp" >= (:end - interval '24 hours')
+            THEN ABS(signed_vol_usd)
+            END
+        ) AS turnover_24h
+        FROM usd_swaps
+        GROUP BY wallet;
+        """.format(raw_table=raw_table)
+    
+    volatile_sql = """
+        WITH base AS (
+        SELECT
+            s.caller AS wallet,
+            date_trunc('hour', s."timestamp")
+            - (EXTRACT(hour FROM s."timestamp")::int % 8) * interval '1 hour'
+            AS bucket_start,
+            s.quote_vol,
+            s.is_buy,
+            s."timestamp"
+        FROM {raw_table} s
+        WHERE s.caller IS NOT NULL
+            AND s."timestamp" >= :start
+            AND s."timestamp" <  :end
+        ),
+
+        priced AS (
+        SELECT
+            b.wallet,
+            b."timestamp",
+            b.quote_vol,
+            b.is_buy,
+            COALESCE(p.{symbol}, 0)::float8 AS bucket_price
+        FROM base b
+        LEFT JOIN price_8h_usd p ON p.bucket_start = b.bucket_start
+        ),
+
+        usd_swaps AS (
+        SELECT
+            wallet,
+            "timestamp",
+            quote_vol * bucket_price * (CASE WHEN is_buy THEN 1 ELSE -1 END) AS signed_vol_usd
+        FROM priced
+        WHERE bucket_price IS NOT NULL
+        )
+
+        SELECT
+        wallet,
+        SUM(ABS(signed_vol_usd))                                    AS turnover,
+        SUM(CASE WHEN signed_vol_usd > 0 THEN  signed_vol_usd END)  AS buy_volume,
+        SUM(CASE WHEN signed_vol_usd < 0 THEN -signed_vol_usd END)  AS sell_volume,
+        COUNT(*)                                                    AS trades,
+        MAX("timestamp")                                            AS last_trade,
+        SUM(
+            CASE
+            WHEN "timestamp" >= (:end - interval '24 hours')
+            THEN ABS(signed_vol_usd)
+            END
+        ) AS turnover_24h
+        FROM usd_swaps
+        GROUP BY wallet;
+        """.format(raw_table=raw_table, symbol=symbol.lower())
+
+
+    sql = stablecoin_sql if is_stable else volatile_sql
+    sql = text(sql)
+
+    grouped = pd.read_sql(
+    sql,
+    db.bind,
+    params={
+        "start": start,
+        "end": end
+        }
+    )
     log.info("  • Aggregated %s wallets in SQL", f"{len(grouped):,}")
 
     if grouped.empty:
