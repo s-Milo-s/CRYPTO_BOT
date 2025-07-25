@@ -19,8 +19,6 @@ from app.sources.dex_data_pipeline.utils.find_quote_usd_prices import FillQuoteU
 # def mock_session():
 #     # Create a real session using env-provided DATABASE_URL
 #     db_url = os.getenv("DATABASE_URL")
-#     assert db_url, "postgresql://neondb_owner:npg_I7Ql5uSHxhTG@ep-spring-hat-a8fuhhe4-pooler.eastus2.azure.neon.tech/neondb?sslmode=require"
-
 #     engine = create_engine(db_url)
 #     Session = sessionmaker(bind=engine)
 #     real_session = Session()
