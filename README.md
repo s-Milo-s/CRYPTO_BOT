@@ -21,7 +21,9 @@ curl -X POST \
 Note: All valid chain / dex / pair combinations are listed in cli_ingest.py.
 
 # ⚙️ Architecture
-<details> <summary>ASCII diagram (click to expand)</summary>
+<details> 
+<summary>ASCII diagram (click to expand)</summary>
+```text
                                               +-----------------+
                                               |   Alchemy Node  |
                                               +-----------------+
@@ -78,6 +80,7 @@ Note: All valid chain / dex / pair combinations are listed in cli_ingest.py.
                               +---------------------+
                               | React/Vite Frontend |
                               +---------------------+
+```
 </details>
 
 # ✨ Feature Highlights
