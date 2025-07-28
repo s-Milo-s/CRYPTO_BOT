@@ -1,63 +1,101 @@
-# FastAPI Project
+# Wallet‑Watchers Ingestion Pipeline
+High‑speed pipeline ingesting DEX swaps and computing wallet‑level metrics for quantitative analysis
 
-This is a simple FastAPI project that serves as a starting point for building web applications using the FastAPI framework.
+# 🚀 Quick Start (Docker Compose)
+# 1. Clone & enter repo
+git clone https://github.com/YOUR_ORG/wallet‑watchers‑ingest.git
+cd wallet‑watchers‑ingest
 
-## Project Structure
+# 2. Copy env template and add your secrets
+cp .env.example .env
+#   └─ fill DATABASE_URL, CELERY_BROKER_URL, CELERY_RESULT_BACKEND, ALCHEMY_API_KEY
 
-```
-fastapi-project
-├── app
-│   └── app.py          # Main application file
-├── Dockerfile           # Dockerfile for containerization
-├── requirements.txt     # Python dependencies
-└── README.md            # Project documentation
-```
+# 3. Launch services (Postgres, Redis, FastAPI, Celery workers …)
+docker compose up -d
 
-## Setup Instructions
+# 4. Trigger a 90‑day back‑fill of BRETT/WETH on Base
+curl -X POST \
+  "http://localhost:8000/api/trigger/ingestion?chain=base&dex=aerodrome&pair=BRETT%2FWETH&pool_address=0x4e829f8a5213c42535ab84aa40bd4adcce9cba02&days_back=90"
 
-1. **Clone the repository:**
-   ```
-   git clone <repository-url>
-   cd fastapi-project
-   ```
+Note: All valid chain / dex / pair combinations are listed in cli_ingest.py.
 
-2. **Create a virtual environment (optional but recommended):**
-   ```
-   python -m venv venv
-   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-   ```
+# ⚙️ Architecture
+<details> <summary>ASCII diagram (click to expand)</summary>
+                                              +-----------------+
+                                              |   Alchemy Node  |
+                                              +-----------------+
+                                                    ^     |
+                                                    |     |  eth_getLogs
+                               refresh quote prices |     |
++-----------------+                                 |     |
+|   Binance API   |---------------------------------+     |
++-----------------+                                       |
+                                                          |  eth_getTransactionByHash
+                                                          |
+                   +---------------------------+           |
+                   |  FastAPI (CLI launcher)   |           |
+                   +---------------------------+           |
+                               |                           |
+                               v                           |
+            +-----------------------------------+          |
+            |   Find pool & start‑for‑loop      |          |
+            +-----------------------------------+          |
+                               |                           |
+                               v                           |
+            +-----------------------------------+<---------+
+            | Log‑fetch / Block‑time cache      |
+            +-----------------------------------+
+                         |            |\
+     fan‑out to decoders |            | \  (parallel Celery workflow)
+                         v            v  \
+        +--------------------+  +--------------------+  +--------------------+
+        |   Celery Decoder   |  |   Celery Decoder   |  |   Celery Decoder   |
+        +--------------------+  +--------------------+  +--------------------+
+                |                     |                       |
+                v                     v                       v
+        +--------------------+  +--------------------+  +--------------------+
+        | Celery Enrichment  |  | Celery Enrichment  |  | Celery Enrichment  |
+        +--------------------+  +--------------------+  +--------------------+
+                \______________   _________|___________   __________________/
+                               \ /                     \ /
+                                v                       v
+                      +---------------------------------------+
+                      |     Aggregator  ➜  upsert swaps       |
+                      +---------------------------------------+
+                                        |
+                                        v
+                              +---------------------+
+                              |   Postgres DB       |
+                              +---------------------+
+                                        ^
+                                        |
+                              +---------------------+
+                              |   Express Server    |
+                              +---------------------+
+                                        ^
+                                        |
+                              +---------------------+
+                              | React/Vite Frontend |
+                              +---------------------+
 
-3. **Install dependencies:**
-   ```
-   pip install -r requirements.txt
-   ```
+# ✨ Feature Highlights
+High‑throughput ingestion — ~500 logs / s raw with parallel Celery decoding & enrichment
 
-## Running the Application
+Wallet‑level aggregation — turnover, avg‑trade size, trade‑count, net‑buy (‑1…1)
 
-To run the FastAPI application, use the following command:
+Multi‑chain / multi‑DEX — currently Arbitrum‑Uniswap v3 & Base‑Aerodrome
 
-```
-uvicorn app.app:app --reload
-```
+Hourly USD quoting — Binance spot API keeps volume & PnL values fresh
 
-This will start the server at `http://127.0.0.1:8000`. You can access the interactive API documentation at `http://127.0.0.1:8000/docs`.
+One‑shot or rolling mode — back‑fill any N days or run continuously via cron/systemd
 
-## Docker Deployment
+# 🔑 Configuration (.env)
 
-To build and run the Docker container, use the following commands:
+| Variable                | Example                             | Description                                |
+| ----------------------- | ----------------------------------- | ------------------------------------------ |
+| `DATABASE_URL`          | `postgres://user:pass@host:5432/db` | Postgres connection string                 |
+| `CELERY_BROKER_URL`     | `redis://redis:6379/0`              | Celery message broker                      |
+| `CELERY_RESULT_BACKEND` | `redis://redis:6379/1`              | Celery task results                        |
+| `ALCHEMY_API_KEY`       | `abcd1234…`                         | RPC access for `eth_getLogs` / tx look‑ups |
 
-1. **Build the Docker image:**
-   ```
-   docker build -t fastapi-project .
-   ```
 
-2. **Run the Docker container:**
-   ```
-   docker run -d -p 8000:8000 fastapi-project
-   ```
-
-The application will be accessible at `http://localhost:8000`.
-
-## License
-
-This project is licensed under the MIT License.
