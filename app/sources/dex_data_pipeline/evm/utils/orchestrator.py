@@ -60,7 +60,7 @@ def run_evm_orchestration(
     # ---------------------------------------------------------------------
     target_time = datetime.utcnow() - timedelta(days=days_back)
     target_ts = int(target_time.timestamp())
-
+    log.info(f"Target timestamp for extraction: {target_ts} ({target_time})")
     start_block = blockClient.find_block_by_timestamp(target_ts)
     end_block = blockClient.get_latest_block()
 
@@ -113,7 +113,7 @@ def run_evm_orchestration(
     # across all block ranges. This cuts RPC calls dramatically vs creating
     # a new object each loop.
     # ---------------------------------------------------------------------
-    ts_resolver = BlockTimestampResolver(w3)
+    ts_resolver = BlockTimestampResolver(w3, rpc_url=rpc_url)
 
 
     log.info(f"Extracting data from blocks {start_block} to {end_block} for pool {pool_address}")

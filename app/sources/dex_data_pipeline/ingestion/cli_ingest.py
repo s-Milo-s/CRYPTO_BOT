@@ -4,6 +4,7 @@ from app.sources.dex_data_pipeline.evm.arbitrum.dexs.uniswap_v3.runner import ru
 from app.sources.dex_data_pipeline.evm.arbitrum.dexs.camelot.runner import run_camelot_orchestration
 from app.sources.dex_data_pipeline.evm.base.dexs.uniswap_v3.runner import run_base_uniswap_orchestration
 from app.sources.dex_data_pipeline.evm.base.dexs.pancakeswap.runner import run_base_pancakeswap_orchestration
+from app.sources.dex_data_pipeline.evm.base.dexs.aerodrome.runner import run_base_aerodrome_orchestration
 from app.storage.db import SessionLocal
 from app.sources.dex_data_pipeline.config.settings import ARBITRUM_BLOCKS_PER_CALL, BASE_BLOCKS_PER_CALL
 import logging
@@ -53,6 +54,10 @@ def runner(
                     case "pancakeswap":
                         log.info(f"[cli] Starting extraction for PancakeSwap {pool_address}")
                         run_base_pancakeswap_orchestration(pool_address, chain, dex, pair, step=BASE_BLOCKS_PER_CALL, days_back=days_back)
+                        log.info("[cli] Extraction completed successfully")
+                    case "aerodrome":
+                        log.info(f"[cli] Starting extraction for Aerodrome {pool_address}")
+                        run_base_aerodrome_orchestration(pool_address, chain, dex, pair, step=BASE_BLOCKS_PER_CALL, days_back=days_back)
                         log.info("[cli] Extraction completed successfully")
                     case _:
                         log.info(f"[cli] Unsupported DEX: {dex}")

@@ -24,19 +24,22 @@ class BlockClient:
         return self.w3.eth.get_block(block_number).timestamp
 
     def find_block_by_timestamp(self, target_ts: int, start_block: int = 0, end_block: int = None) -> int:
+        logger.info(f"Finding block for timestamp {target_ts} (start={start_block}, end={end_block})")
         if end_block is None:
             end_block = self.get_latest_block()
-
+        logger.info(f"Searching in blocks {start_block} to {end_block}")
         while start_block <= end_block:
             mid = (start_block + end_block) // 2
             mid_ts = self.get_block_timestamp(mid)
-
             if mid_ts < target_ts:
                 start_block = mid + 1
             elif mid_ts > target_ts:
                 end_block = mid - 1
             else:
+                logger.info(f"Found exact match at block {mid}")
                 return mid
+        logger.info(f"mid_ts is not equal to target_ts, returning start_block mid: {mid_ts}")
+        logger.info(f"Block for timestamp {target_ts} not found, returning start_block {start_block}")
         return start_block
 
     def walk_block_ranges(self, start: int, end: int, step: int = 1000):
@@ -66,7 +69,9 @@ class BlockClient:
         want_start_ts = int((datetime.utcnow() - timedelta(days=days_back)).timestamp())
         latest_block = self.get_latest_block()
         gaps = []
-
+        logger.info(f"Checking gaps in {table_name} for {days_back} days back, "
+                    f"have min_ts={have_min_ts}, have max_ts={have_max_ts}, "
+                    f"latest block={latest_block}")
         if have_min_ts is None:
             gaps.append((self.find_block_by_timestamp(want_start_ts), latest_block))
             return gaps
@@ -89,10 +94,11 @@ from web3 import Web3
 from typing import List, Dict
 
 class BlockTimestampResolver:
-    def __init__(self, w3: Web3, num_chunks: int = 5):
+    def __init__(self, w3: Web3, num_chunks: int = 5, rpc_url: str = ARBITRUM_RPC_URL):
         self.w3 = w3
         self.ranges = []  # Stores (start_block, end_block, start_ts, slope)
         self.num_chunks = num_chunks
+        self.rpc_url = rpc_url
 
     def _get_single_block_ts(self, block: int) -> int | None:
         """
@@ -131,7 +137,7 @@ class BlockTimestampResolver:
             for i, b in enumerate(sorted_anchors)
         ]
         try:
-            r = requests.post(ARBITRUM_RPC_URL, json=payload, timeout=10)
+            r = requests.post(self.rpc_url, json=payload, timeout=10)
             r.raise_for_status()
             batch_res = r.json()
         except Exception as exc:

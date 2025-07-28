@@ -44,7 +44,7 @@ def crunch_wallet_metrics(
     db: Session,
     raw_table: str,
     metrics_table: str | None = None,
-    days_back: int = 180,
+    days_back: int = 90,
     quote_token: str = "USDC"
 ) -> None:
     metrics_table = metrics_table or metrics_table_name(raw_table)

@@ -183,3 +183,7 @@ INSERT INTO pools (chain, dex, pair, address, active, last_started)
 VALUES
   ('arbitrum', 'uniswap_v3', 'WETH/USDT', '0xc31e54c7a869b9fcbecc14363cf510d1c41fa443', TRUE, NULL),
   ('arbitrum', 'uniswap_v3', 'WBTC/USDT', '0x5969EFddE3cF5C0D9a88aE51E47d721096A97203', TRUE, NULL);
+
+INSERT INTO pools (chain, dex, pair, address, active, last_started)
+VALUES
+  ('arbitrum', 'uniswap_v3', 'ARB/WETH', '0xc6f780497a95e246eb9449f5e4770916dcd6396a', TRUE, NULL),
