@@ -19,5 +19,28 @@
         "pair":"ARB/WETH",
         "pool_address":"0xc6f780497a95e246eb9449f5e4770916dcd6396a"    
 
+    },
+    {
+        "chain":"arbitrum",
+        "dex":"uniswap_v3",
+        "pair":"CRV/WETH",
+        "pool_address":"0xa95b0f5a65a769d82ab4f3e82842e45b8bbaf101"    
+
+    },
+    {
+        "chain":"base",
+        "dex":"aerodrome",
+        "pair":"DEGEN/WETH",
+        "pool_address":"0xafb62448929664bfccb0aae22f232520e765ba88"    
+
+    },
+    {
+        "chain":"base",
+        "dex":"aerodrome",
+        "pair":"BRETT/WETH",
+        "pool_address":"0x4e829f8a5213c42535ab84aa40bd4adcce9cba02"    
+
     }
+
+ 
 ]

@@ -4,7 +4,7 @@ High‑speed pipeline ingesting DEX swaps and computing wallet‑level metrics f
 # 🚀 Quick Start (Docker Compose)
 
 1. Clone & enter repo
-git clone https://github.com/YOUR_ORG/wallet‑watchers‑ingest.git
+git clone https://github.com/s-Milo-s/CRYPTO_BOT.git
 cd wallet‑watchers‑ingest
 
 2. Copy env template and add your secrets
@@ -16,13 +16,11 @@ docker compose up -d
 
 4. Trigger a 90‑day back‑fill of BRETT/WETH on Base
 curl -X POST \
-  "http://localhost:8000/api/trigger/ingestion?chain=base&dex=aerodrome&pair=BRETT%2FWETH&pool_address=0x4e829f8a5213c42535ab84aa40bd4adcce9cba02&days_back=90"
+  "http://localhost:8000/api/trigger/ingestion?chain=base&dex=aerodrome&pair=BRETT%2FWETH&pool_address=0x4e829f8a5213c42535ab84aa40bd4adcce9cba02&days_back=1"
 
 Note: All valid chain / dex / pair combinations are listed in cli_ingest.py.
 
 # ⚙️ Architecture
-<details> 
-## ⚙️ Architecture
 <details>
 <summary>ASCII diagram (click to expand)</summary>
 
