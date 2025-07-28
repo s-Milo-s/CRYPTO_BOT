@@ -2,18 +2,19 @@
 High‑speed pipeline ingesting DEX swaps and computing wallet‑level metrics for quantitative analysis
 
 # 🚀 Quick Start (Docker Compose)
-# 1. Clone & enter repo
+
+1. Clone & enter repo
 git clone https://github.com/YOUR_ORG/wallet‑watchers‑ingest.git
 cd wallet‑watchers‑ingest
 
-# 2. Copy env template and add your secrets
+2. Copy env template and add your secrets
 cp .env.example .env
-#   └─ fill DATABASE_URL, CELERY_BROKER_URL, CELERY_RESULT_BACKEND, ALCHEMY_API_KEY
+  └─ fill DATABASE_URL, CELERY_BROKER_URL, CELERY_RESULT_BACKEND, ALCHEMY_API_KEY
 
-# 3. Launch services (Postgres, Redis, FastAPI, Celery workers …)
+3. Launch services (Postgres, Redis, FastAPI, Celery workers …)
 docker compose up -d
 
-# 4. Trigger a 90‑day back‑fill of BRETT/WETH on Base
+4. Trigger a 90‑day back‑fill of BRETT/WETH on Base
 curl -X POST \
   "http://localhost:8000/api/trigger/ingestion?chain=base&dex=aerodrome&pair=BRETT%2FWETH&pool_address=0x4e829f8a5213c42535ab84aa40bd4adcce9cba02&days_back=90"
 
@@ -77,6 +78,7 @@ Note: All valid chain / dex / pair combinations are listed in cli_ingest.py.
                               +---------------------+
                               | React/Vite Frontend |
                               +---------------------+
+<details>
 
 # ✨ Feature Highlights
 High‑throughput ingestion — ~500 logs / s raw with parallel Celery decoding & enrichment
