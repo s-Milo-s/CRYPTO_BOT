@@ -3,26 +3,42 @@ High‑speed pipeline ingesting DEX swaps and computing wallet‑level metrics f
 
 # 🚀 Quick Start (Docker Compose)
 
-1. Clone & enter repo
-git clone https://github.com/YOUR_ORG/wallet‑watchers‑ingest.git
-cd wallet‑watchers‑ingest
+1. Clone & enter repo <br>
+git clone https://github.com/s-Milo-s/CRYPTO_BOT.git <br>
+cd wallet‑watchers‑ingest 
 
-2. Copy env template and add your secrets
-cp .env.example .env
+2. Copy env template and add your secrets <br>
+cp .env.example .env <br>
   └─ fill DATABASE_URL, CELERY_BROKER_URL, CELERY_RESULT_BACKEND, ALCHEMY_API_KEY
 
-3. Launch services (Postgres, Redis, FastAPI, Celery workers …)
+3. Launch services (Postgres, Redis, FastAPI, Celery workers …) <br>
 docker compose up -d
 
-4. Trigger a 90‑day back‑fill of BRETT/WETH on Base
-curl -X POST \
-  "http://localhost:8000/api/trigger/ingestion?chain=base&dex=aerodrome&pair=BRETT%2FWETH&pool_address=0x4e829f8a5213c42535ab84aa40bd4adcce9cba02&days_back=90"
+## 🛠️ API Reference
+
+> **Interactive docs:** once the stack is running, visit **`http://localhost:8000/docs`**  
+> (FastAPI auto‑generates a Swagger UI where you can trigger jobs without cURL.)
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `POST` | `/api/trigger/ingestion` | Launch a one‑shot ingest / back‑fill task |
+
+### Query parameters
+
+| Name | Type | Required | Example | Description |
+|------|------|----------|---------|-------------|
+| `chain` | `str` | ✔ | `base` | Target blockchain (`base`, `arbitrum`, …) |
+| `dex` | `str` | ✔ | `aerodrome` | Supported DEX (`aerodrome`, `uniswap`) |
+| `pair` | `str` | ✔ | `BRETT/WETH` (URL‑encoded) | Token pair label |
+| `pool_address` | `str` | ✔ | `0x4e829f8…` | Pool contract address |
+| `days_back` | `int` | ❌ (default =`1`) | `90` | How many days of history to ingest |
 
 Note: All valid chain / dex / pair combinations are listed in cli_ingest.py.
 
 # ⚙️ Architecture
-<details> 
+<details>
 <summary>ASCII diagram (click to expand)</summary>
+
 ```text
                                               +-----------------+
                                               |   Alchemy Node  |
@@ -35,12 +51,12 @@ Note: All valid chain / dex / pair combinations are listed in cli_ingest.py.
 +-----------------+                                       |
                                                           |  eth_getTransactionByHash
                                                           |
-                   +---------------------------+           |
-                   |  FastAPI (CLI launcher)   |           |
-                   +---------------------------+           |
-                               |                           |
-                               v                           |
-            +-----------------------------------+          |
+                   +---------------------------+          |
+                   |  FastAPI (CLI launcher)   |          |
+                   +---------------------------+          |
+                               |                          |
+                               v                          |
+            +-----------------------------------+         |
             |   Find pool & start‑for‑loop      |          |
             +-----------------------------------+          |
                                |                           |
@@ -81,6 +97,7 @@ Note: All valid chain / dex / pair combinations are listed in cli_ingest.py.
                               | React/Vite Frontend |
                               +---------------------+
 ```
+
 </details>
 
 # ✨ Feature Highlights
