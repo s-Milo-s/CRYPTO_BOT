@@ -22,7 +22,10 @@ Note: All valid chain / dex / pair combinations are listed in cli_ingest.py.
 
 # ⚙️ Architecture
 <details> 
+## ⚙️ Architecture
+<details>
 <summary>ASCII diagram (click to expand)</summary>
+
 ```text
                                               +-----------------+
                                               |   Alchemy Node  |
@@ -35,12 +38,12 @@ Note: All valid chain / dex / pair combinations are listed in cli_ingest.py.
 +-----------------+                                       |
                                                           |  eth_getTransactionByHash
                                                           |
-                   +---------------------------+           |
-                   |  FastAPI (CLI launcher)   |           |
-                   +---------------------------+           |
-                               |                           |
-                               v                           |
-            +-----------------------------------+          |
+                   +---------------------------+          |
+                   |  FastAPI (CLI launcher)   |          |
+                   +---------------------------+          |
+                               |                          |
+                               v                          |
+            +-----------------------------------+         |
             |   Find pool & start‑for‑loop      |          |
             +-----------------------------------+          |
                                |                           |
@@ -81,6 +84,7 @@ Note: All valid chain / dex / pair combinations are listed in cli_ingest.py.
                               | React/Vite Frontend |
                               +---------------------+
 ```
+
 </details>
 
 # ✨ Feature Highlights
