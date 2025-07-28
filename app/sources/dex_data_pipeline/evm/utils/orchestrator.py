@@ -11,7 +11,7 @@ from app.storage.db_utils import resolve_table_name
 from app.sources.dex_data_pipeline.evm.utils.client import get_web3_client
 from app.sources.dex_data_pipeline.evm.utils.blocks import BlockTimestampResolver, BlockClient
 from app.sources.dex_data_pipeline.utils.cleaner import delete_price_anomalies_with_retry
-from app.sources.dex_data_pipeline.utils.feature_generator import crunch_metrics_for_table
+from app.sources.dex_data_pipeline.utils.crunch_pool_flow import crunch_pool_flow
 from app.sources.dex_data_pipeline.utils.log_extraction_metrics import log_extraction_metrics
 from app.sources.dex_data_pipeline.evm.utils.enrich_tx_batch import enrich_tx_batch
 from app.storage.db import SessionLocal
@@ -103,7 +103,7 @@ def run_evm_orchestration(
     
     # log.info(f"Using table: {table_name} for {token0}/{token1} pair")
     with SessionLocal() as session:
-        filler = FillQuoteUSDPrices(session, "ETH", days_back=1)
+        filler = FillQuoteUSDPrices(session, "ETH", days_back=days_back)
         asyncio.run(filler.fill_missing_prices())
 
 
@@ -187,6 +187,13 @@ def run_evm_orchestration(
         db.commit()
     with SessionLocal() as db:
         crunch_wallet_metrics(
+            db,
+            swap_table,
+            quote_token=quote_pair,   
+        )
+        db.commit()
+    with SessionLocal() as db:
+        crunch_pool_flow(
             db,
             swap_table,
             quote_token=quote_pair,   

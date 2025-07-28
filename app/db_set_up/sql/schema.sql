@@ -187,3 +187,19 @@ VALUES
 INSERT INTO pools (chain, dex, pair, address, active, last_started)
 VALUES
   ('arbitrum', 'uniswap_v3', 'ARB/WETH', '0xc6f780497a95e246eb9449f5e4770916dcd6396a', TRUE, NULL),
+
+INSERT INTO pools (chain, dex, pair, address, active, last_started)
+VALUES
+  ('arbitrum', 'uniswap_v3', 'CRV/WETH', '0xa95b0f5a65a769d82ab4f3e82842e45b8bbaf101', TRUE, NULL),
+  ('base', 'aerodrome', 'DEGEN/WETH', '0xafb62448929664bfccb0aae22f232520e765ba88', TRUE, NULL),
+  ('base', 'aerodrome', 'BRETT/WETH', '0x4e829f8a5213c42535ab84aa40bd4adcce9cba02', TRUE, NULL);
+
+CREATE TABLE IF NOT EXISTS pool_flow_hourly (
+          pool_slug    TEXT         NOT NULL,
+          bucket_start TIMESTAMPTZ  NOT NULL,
+          buys_usd     NUMERIC(38,2),
+          sells_usd    NUMERIC(38,2),
+          volume_usd   NUMERIC(38,2),
+          pressure     NUMERIC(8,5),
+          PRIMARY KEY (pool_slug, bucket_start)
+        );
