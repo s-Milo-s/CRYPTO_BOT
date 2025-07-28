@@ -78,7 +78,7 @@ Note: All valid chain / dex / pair combinations are listed in cli_ingest.py.
                               +---------------------+
                               | React/Vite Frontend |
                               +---------------------+
-<details>
+</details>
 
 # ✨ Feature Highlights
 High‑throughput ingestion — ~500 logs / s raw with parallel Celery decoding & enrichment
